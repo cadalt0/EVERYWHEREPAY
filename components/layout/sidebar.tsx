@@ -8,9 +8,13 @@ import { SettingsModal } from '@/components/dashboard/modals/settings-modal';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/deposit', label: 'Deposit', icon: Plus },
+  { href: '/send', label: 'Send', icon: Send },
+  { href: '/request', label: 'Request', icon: Share2 },
   { href: '/invoice', label: 'Invoices', icon: FileText },
   { href: '/payout', label: 'Payouts', icon: Wallet },
 ];
+import { Plus, Send, Share2 } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();

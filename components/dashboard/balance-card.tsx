@@ -28,22 +28,7 @@ export function BalanceCard() {
         </button>
       </div>
 
-      <div className="text-xs opacity-70 mb-4">Across all supported chains</div>
-
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Ethereum', value: mockBalance.ethereum },
-          { label: 'Polygon', value: mockBalance.polygon },
-          { label: 'Arbitrum', value: mockBalance.arbitrum },
-        ].map((chain) => (
-          <div key={chain.label}>
-            <div className="text-xs opacity-70 mb-1">{chain.label}</div>
-            <div className="text-sm font-mono font-semibold">
-              ${chain.value.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-            </div>
-          </div>
-        ))}
-      </div>
+      <div className="text-xs opacity-70">Total balance across all chains</div>
     </div>
   );
 }

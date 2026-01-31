@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
 import { chains } from '@/lib/mock-data';
 
 interface SendModalProps {
@@ -25,12 +26,17 @@ export function SendModal({ isOpen, onClose }: SendModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-xl font-bold font-mono">Send USDC</h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-muted rounded transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link href="/send" target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-muted rounded transition-colors" title="Open full page">
+              <ArrowUpRight className="w-5 h-5" />
+            </Link>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-muted rounded transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}

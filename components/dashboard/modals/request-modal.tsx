@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Copy, Check } from 'lucide-react';
+import { X, Copy, Check, ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { chains } from '@/lib/mock-data';
 
@@ -38,12 +39,17 @@ export function RequestModal({ isOpen, onClose }: RequestModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-xl font-bold font-mono">Request Payment</h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-muted rounded transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link href="/request" target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-muted rounded transition-colors" title="Open full page">
+              <ArrowUpRight className="w-5 h-5" />
+            </Link>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-muted rounded transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
