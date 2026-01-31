@@ -10,7 +10,9 @@ import { RequestModal } from '@/components/dashboard/modals/request-modal';
 import { TransactionTable } from '@/components/dashboard/transaction-table';
 import { Send, Plus, Share2, FileText, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import DashboardAuthChecker from './page-client-auth';
 import GoogleUserLogger from './page-client-google-user';
+import { toast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const [openModals, setOpenModals] = useState({
@@ -25,11 +27,29 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen bg-background">
+      <DashboardAuthChecker />
       <GoogleUserLogger />
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar title="Dashboard" />
+        <Topbar title="Dashboard">
+          <button
+            onClick={() => {
+              localStorage.removeItem('user');
+              toast({
+                title: 'Logged out',
+                description: 'You have been logged out.',
+                variant: 'default',
+              });
+              setTimeout(() => {
+                window.location.href = '/auth/login';
+              }, 800);
+            }}
+            className="ml-auto px-4 py-2 bg-destructive text-destructive-foreground rounded-lg font-mono font-bold hover:bg-destructive/80 transition-colors"
+          >
+            Logout
+          </button>
+        </Topbar>
 
         <main className="flex-1 overflow-auto">
           <div className="p-4 md:p-8 space-y-8">

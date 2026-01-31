@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { oauthSignIn } from '@/lib/google-oauth';
 import { useEffect, useState } from 'react';
+import { toast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,6 +42,31 @@ export default function LoginPage() {
   // Handle Google OAuth callback on this page
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // 1. Check for user in localStorage
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      // Always show toast and delay redirect, even on first render
+      setTimeout(() => {
+        toast({
+          title: 'Recent login found',
+          description: 'Auto logging in ...',
+          variant: 'default',
+        });
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 300);
+      }, 100); // slight delay to ensure Toaster is mounted
+      return;
+    } else {
+      setTimeout(() => {
+        toast({
+          title: 'Login not found',
+          description: 'Please login to continue.',
+          variant: 'destructive',
+        });
+      }, 100);
+    }
+    // 2. Handle Google OAuth callback
     const hash = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
     const accessToken = params.get('access_token');
@@ -51,12 +77,47 @@ export default function LoginPage() {
       fetch('https://www.googleapis.com/oauth2/v3/userinfo?access_token=' + accessToken)
         .then(res => res.json())
         .then(async user => {
-          await fetch('/api/auth/google-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gmail: user.email }),
-          });
-          router.push('/dashboard');
+          try {
+            // 1. Check if user exists in DB
+            const checkRes = await fetch('/api/circle/check-user-exists', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email }),
+            });
+            const checkData = await checkRes.json();
+            if (checkData.exists) {
+              // Save user info to localStorage
+              localStorage.setItem('user', JSON.stringify(user));
+              router.push('/dashboard');
+              return;
+            }
+            // 2. Create Circle wallets (backend) if not exists
+            const walletRes = await fetch('/api/circle/create-wallets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email }),
+            });
+            const walletData = await walletRes.json();
+            if (!walletRes.ok || walletData?.dbResponse?.error) {
+              throw new Error(
+                walletData?.dbResponse?.error?.error ||
+                walletData?.dbResponse?.error ||
+                walletData?.error ||
+                'Failed to create Circle wallets or save to DB'
+              );
+            }
+            // Save user info to localStorage
+            localStorage.setItem('user', JSON.stringify(user));
+            // 3. Only redirect if all succeed
+            router.push('/dashboard');
+          } catch (err) {
+            setGoogleLoading(false);
+            toast({
+              title: 'Login failed',
+              description: err instanceof Error ? err.message : 'Unknown error',
+              variant: 'destructive',
+            });
+          }
         });
     }
   }, [router]);
