@@ -47,6 +47,15 @@ export const startServer = (port = DEFAULT_PORT) => {
   console.log(`HTTP: http://localhost:${port}`);
   console.log(`WebSocket: ws://localhost:${port}`);
 
+  // Heroku-friendly: ping clients every 5 seconds to keep connection alive
+  setInterval(() => {
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.ping();
+      }
+    });
+  }, 5000);
+
   wss.on('connection', (ws) => {
     clientState.set(ws, { chains: new Set(), watchAddress: null, email: null });
     ws.send(JSON.stringify({
