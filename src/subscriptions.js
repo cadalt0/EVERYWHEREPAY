@@ -1,5 +1,6 @@
 import { WebSocketProvider, Contract, formatUnits } from 'ethers';
 import { chainConfigs, ERC20_ABI } from './config.js';
+import { getUserByGmail, saveTxcoming } from './db.js';
 
 const providerCache = new Map();
 const contractCache = new Map();
@@ -57,12 +58,51 @@ export const ensureChainListener = (chain, wss, clientState) => {
         return;
       }
       const state = clientState.get(client);
-      if (!state || !state.chains.has(chain) || !state.watchAddress) {
+      if (!state || !state.chains.has(chain) || !state.watchAddress || !state.email) {
         return;
       }
       const watch = state.watchAddress;
       if (fromLower === watch || toLower === watch) {
         client.send(JSON.stringify({ type: 'usdc_transfer', data: transfer }));
+        if (transfer.txHash) {
+          void (async () => {
+            try {
+              console.log('Processing transaction for:', state.email);
+              const user = await getUserByGmail(state.email);
+              if (!user || !user.walletSetId || !user.addresses) {
+                console.error('User not found or missing walletSetId/addresses for email:', state.email);
+                return;
+              }
+              console.log('User found:', { walletSetId: user.walletSetId, addressCount: Object.keys(user.addresses).length });
+              const addressValues = Object.values(user.addresses || {}).filter((v) => typeof v === 'string');
+              const expectedAddress = addressValues.length > 0 ? addressValues[0] : null;
+              if (!expectedAddress) {
+                console.error('Missing addresses for user:', state.email);
+                return;
+              }
+              console.log('Expected address:', expectedAddress, 'Receiver:', transfer.to, 'WatchAddress:', state.watchAddress);
+              const expectedLower = expectedAddress.toLowerCase();
+              const receiverLower = transfer.to.toLowerCase();
+              if (receiverLower !== expectedLower || receiverLower !== state.watchAddress) {
+                console.error('Receiver address mismatch:', { expectedLower, receiverLower, watchAddress: state.watchAddress, email: state.email });
+                return;
+              }
+              console.log('Address validation passed. Saving transaction...');
+              await saveTxcoming({
+                mail: state.email,
+                walletid: user.walletSetId,
+                txhash: transfer.txHash,
+                amount: transfer.value,
+                chain: transfer.chain,
+                sender: transfer.from,
+                status: 'pending'
+              });
+              console.log('Transaction saved successfully:', transfer.txHash);
+            } catch (err) {
+              console.error('Failed to save transaction:', err);
+            }
+          })();
+        }
         matched = true;
       }
     });

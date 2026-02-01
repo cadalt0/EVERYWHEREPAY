@@ -48,7 +48,7 @@ export const startServer = (port = DEFAULT_PORT) => {
   console.log(`WebSocket: ws://localhost:${port}`);
 
   wss.on('connection', (ws) => {
-    clientState.set(ws, { chains: new Set(), watchAddress: null });
+    clientState.set(ws, { chains: new Set(), watchAddress: null, email: null });
     ws.send(JSON.stringify({
       type: 'info',
       message: 'Connected. Send {"type":"subscribe","chain":"AVAX-FUJI","address":"0x..."} or {"type":"subscribe_all","address":"0x..."}.'
@@ -66,6 +66,7 @@ export const startServer = (port = DEFAULT_PORT) => {
       if (msg.type === 'subscribe') {
         const chain = msg.chain;
         const address = (msg.address || '').toLowerCase();
+        const email = (msg.email || '').trim();
         if (!chainConfigs[chain]) {
           ws.send(JSON.stringify({ type: 'error', message: 'Unsupported chain.' }));
           return;
@@ -74,19 +75,29 @@ export const startServer = (port = DEFAULT_PORT) => {
           ws.send(JSON.stringify({ type: 'error', message: 'Invalid address.' }));
           return;
         }
+        if (!email) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Email is required.' }));
+          return;
+        }
         const state = clientState.get(ws);
         state.chains.add(chain);
         state.watchAddress = address;
+        state.email = email;
         ensureChainListener(chain, wss, clientState);
-        console.log(`Client subscribed: ${chain} - ${address}`);
-        ws.send(JSON.stringify({ type: 'subscribed', chain, address }));
+        console.log(`Client subscribed: ${chain} - ${address} - ${email}`);
+        ws.send(JSON.stringify({ type: 'subscribed', chain, address, email }));
         return;
       }
 
       if (msg.type === 'subscribe_all') {
         const address = (msg.address || '').toLowerCase();
+        const email = (msg.email || '').trim();
         if (!isValidAddress(address)) {
           ws.send(JSON.stringify({ type: 'error', message: 'Invalid address.' }));
+          return;
+        }
+        if (!email) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Email is required.' }));
           return;
         }
         const state = clientState.get(ws);
@@ -96,8 +107,9 @@ export const startServer = (port = DEFAULT_PORT) => {
           ensureChainListener(chain, wss, clientState);
         });
         state.watchAddress = address;
-        console.log(`Client subscribed to ALL chains - ${address}`);
-        ws.send(JSON.stringify({ type: 'subscribed_all', chains: allChains, address }));
+        state.email = email;
+        console.log(`Client subscribed to ALL chains - ${address} - ${email}`);
+        ws.send(JSON.stringify({ type: 'subscribed_all', chains: allChains, address, email }));
         return;
       }
 
@@ -105,6 +117,7 @@ export const startServer = (port = DEFAULT_PORT) => {
         const state = clientState.get(ws);
         state.chains.clear();
         state.watchAddress = null;
+        state.email = null;
         console.log('Client unsubscribed');
         ws.send(JSON.stringify({ type: 'unsubscribed' }));
         return;
