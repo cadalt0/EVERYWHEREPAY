@@ -57,7 +57,7 @@ export const ensureChainListener = (chain, wss, clientState) => {
         return;
       }
       const state = clientState.get(client);
-      if (!state || state.chain !== chain || !state.watchAddress) {
+      if (!state || !state.chains.has(chain) || !state.watchAddress) {
         return;
       }
       const watch = state.watchAddress;

@@ -48,10 +48,10 @@ export const startServer = (port = DEFAULT_PORT) => {
   console.log(`WebSocket: ws://localhost:${port}`);
 
   wss.on('connection', (ws) => {
-    clientState.set(ws, { chain: null, watchAddress: null });
+    clientState.set(ws, { chains: new Set(), watchAddress: null });
     ws.send(JSON.stringify({
       type: 'info',
-      message: 'Connected. Send {"type":"subscribe","chain":"AVAX-FUJI","address":"0x..."}.'
+      message: 'Connected. Send {"type":"subscribe","chain":"AVAX-FUJI","address":"0x..."} or {"type":"subscribe_all","address":"0x..."}.'
     }));
 
     ws.on('message', (raw) => {
@@ -74,15 +74,37 @@ export const startServer = (port = DEFAULT_PORT) => {
           ws.send(JSON.stringify({ type: 'error', message: 'Invalid address.' }));
           return;
         }
-        clientState.set(ws, { chain, watchAddress: address });
+        const state = clientState.get(ws);
+        state.chains.add(chain);
+        state.watchAddress = address;
         ensureChainListener(chain, wss, clientState);
         console.log(`Client subscribed: ${chain} - ${address}`);
         ws.send(JSON.stringify({ type: 'subscribed', chain, address }));
         return;
       }
 
+      if (msg.type === 'subscribe_all') {
+        const address = (msg.address || '').toLowerCase();
+        if (!isValidAddress(address)) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Invalid address.' }));
+          return;
+        }
+        const state = clientState.get(ws);
+        const allChains = Object.keys(chainConfigs);
+        allChains.forEach(chain => {
+          state.chains.add(chain);
+          ensureChainListener(chain, wss, clientState);
+        });
+        state.watchAddress = address;
+        console.log(`Client subscribed to ALL chains - ${address}`);
+        ws.send(JSON.stringify({ type: 'subscribed_all', chains: allChains, address }));
+        return;
+      }
+
       if (msg.type === 'unsubscribe') {
-        clientState.set(ws, { chain: null, watchAddress: null });
+        const state = clientState.get(ws);
+        state.chains.clear();
+        state.watchAddress = null;
         console.log('Client unsubscribed');
         ws.send(JSON.stringify({ type: 'unsubscribed' }));
         return;
