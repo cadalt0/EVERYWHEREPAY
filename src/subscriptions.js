@@ -95,7 +95,8 @@ export const ensureChainListener = (chain, wss, clientState) => {
                 amount: transfer.value,
                 chain: transfer.chain,
                 sender: transfer.from,
-                status: 'pending'
+                txtype: 'IN',
+                status: 'received'
               });
               console.log('Transaction saved successfully:', transfer.txHash);
             } catch (err) {

@@ -30,7 +30,8 @@ export const ensureTxcomingTable = async () => {
       amount TEXT NOT NULL,
       chain TEXT NOT NULL,
       sender TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
+      txtype TEXT NOT NULL DEFAULT 'IN',
+      status TEXT NOT NULL DEFAULT 'received',
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       UNIQUE (mail, txhash)
     );
@@ -38,18 +39,19 @@ export const ensureTxcomingTable = async () => {
   const p = getPool();
   await p.query(sql);
   await p.query('ALTER TABLE txcoming ADD COLUMN IF NOT EXISTS walletid TEXT;');
+  await p.query('ALTER TABLE txcoming ADD COLUMN IF NOT EXISTS txtype TEXT DEFAULT \'IN\';');
   await p.query('CREATE UNIQUE INDEX IF NOT EXISTS txcoming_mail_txhash_uniq ON txcoming (mail, txhash);');
 };
 
-export const saveTxcoming = async ({ mail, walletid, txhash, amount, chain, sender, status = 'pending' }) => {
+export const saveTxcoming = async ({ mail, walletid, txhash, amount, chain, sender, txtype = 'IN', status = 'received' }) => {
   await ensureTxcomingTable();
   const sql = `
-    INSERT INTO txcoming (mail, walletid, txhash, amount, chain, sender, status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO txcoming (mail, walletid, txhash, amount, chain, sender, txtype, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     ON CONFLICT (mail, txhash) DO NOTHING
     RETURNING id;
   `;
-  const values = [mail, walletid, txhash, amount, chain, sender, status];
+  const values = [mail, walletid, txhash, amount, chain, sender, txtype, status];
   const p = getPool();
   const result = await p.query(sql, values);
   return { inserted: result.rowCount > 0 };
