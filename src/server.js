@@ -1,8 +1,10 @@
 import express from 'express';
+import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { chainConfigs } from './config.js';
 import { ensureChainListener, isValidAddress } from './subscriptions.js';
+import { getUserByGmail } from './db.js';
 
 const DEFAULT_PORT = process.env.PORT || 8090;
 
@@ -10,6 +12,15 @@ export const startServer = (port = DEFAULT_PORT) => {
   // Create Express app
   const app = express();
   app.use(express.json());
+  app.use(cors({
+    origin: [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'https://everywherepay-e63bce248faa.herokuapp.com'
+    ],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    credentials: true
+  }));
 
   // HTTP REST endpoints
   app.get('/', (req, res) => {
@@ -34,6 +45,27 @@ export const startServer = (port = DEFAULT_PORT) => {
       usdcAddress: chainConfigs[chain].usdcAddress
     }));
     res.json({ chains });
+  });
+
+  app.get('/api/wallets', async (req, res) => {
+    const email = req.query.email;
+    if (!email || typeof email !== 'string' || email.trim() === '') {
+      return res.status(400).json({ error: 'Missing email' });
+    }
+    try {
+      const user = await getUserByGmail(email);
+      if (!user || !user.addresses) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const addressValues = Object.values(user.addresses || {}).filter((v) => typeof v === 'string');
+      const address = addressValues.length > 0 ? addressValues[0] : null;
+      if (!address) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      return res.status(200).json({ address });
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to fetch wallets', details: err.message });
+    }
   });
 
   // Create HTTP server
