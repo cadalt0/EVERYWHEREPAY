@@ -11,30 +11,30 @@ const pendingConnections = new Map(); // Track pending connections to avoid dupl
 const nativeBalanceCache = new Map();
 const nativeProcessedTx = new Set();
 
-// // Simple global rate limiter for ARC getBalance calls (max 10/sec)
-// let arcBalanceQueue = [];
-// let arcBalanceActive = false;
-// async function arcRateLimitedGetBalance(provider, address) {
-//   return new Promise((resolve, reject) => {
-//     arcBalanceQueue.push({ provider, address, resolve, reject });
-//     if (!arcBalanceActive) {
-//       arcBalanceActive = true;
-//       (async function processQueue() {
-//         while (arcBalanceQueue.length > 0) {
-//           const { provider, address, resolve, reject } = arcBalanceQueue.shift();
-//           try {
-//             const result = await provider.getBalance(address);
-//             resolve(result);
-//           } catch (e) {
-//             reject(e);
-//           }
-//           await new Promise(r => setTimeout(r, 110)); // 110ms between calls ≈ 9/sec
-//         }
-//         arcBalanceActive = false;
-//       })();
-//     }
-//   });
-// }
+// Simple global rate limiter for ARC getBalance calls (max 10/sec)
+let arcBalanceQueue = [];
+let arcBalanceActive = false;
+async function arcRateLimitedGetBalance(provider, address) {
+  return new Promise((resolve, reject) => {
+    arcBalanceQueue.push({ provider, address, resolve, reject });
+    if (!arcBalanceActive) {
+      arcBalanceActive = true;
+      (async function processQueue() {
+        while (arcBalanceQueue.length > 0) {
+          const { provider, address, resolve, reject } = arcBalanceQueue.shift();
+          try {
+            const result = await provider.getBalance(address);
+            resolve(result);
+          } catch (e) {
+            reject(e);
+          }
+          await new Promise(r => setTimeout(r, 110)); // 110ms between calls ≈ 9/sec
+        }
+        arcBalanceActive = false;
+      })();
+    }
+  });
+}
 let connectionDelay = 0; // Stagger connections to avoid rate limits
 
 export const getProvider = async (chain) => {
