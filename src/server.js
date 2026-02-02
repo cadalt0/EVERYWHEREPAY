@@ -222,12 +222,14 @@ export const startServer = (port = DEFAULT_PORT) => {
         const state = clientState.get(ws);
         const allChains = Object.keys(chainConfigs);
         
-        // Attach listeners with staggered delays
+        // Attach listeners with 1 second staggered delays
         allChains.forEach((chain, index) => {
-          state.chains.add(chain);
-          ensureAddressListener(chain, address, wss, clientState).catch(err => {
-            console.error(`[WS#${state.id}] Failed to attach listener for ${chain}:`, err);
-          });
+          setTimeout(() => {
+            state.chains.add(chain);
+            ensureAddressListener(chain, address, wss, clientState).catch(err => {
+              console.error(`[WS#${state.id}] Failed to attach listener for ${chain}:`, err);
+            });
+          }, index * 1000); // 1 second delay per chain
         });
         state.watchAddress = address;
         state.email = email;
