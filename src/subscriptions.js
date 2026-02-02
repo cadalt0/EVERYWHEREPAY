@@ -10,6 +10,31 @@ const addressListenerAttached = new Set();
 const pendingConnections = new Map(); // Track pending connections to avoid duplicates
 const nativeBalanceCache = new Map();
 const nativeProcessedTx = new Set();
+
+// // Simple global rate limiter for ARC getBalance calls (max 10/sec)
+// let arcBalanceQueue = [];
+// let arcBalanceActive = false;
+// async function arcRateLimitedGetBalance(provider, address) {
+//   return new Promise((resolve, reject) => {
+//     arcBalanceQueue.push({ provider, address, resolve, reject });
+//     if (!arcBalanceActive) {
+//       arcBalanceActive = true;
+//       (async function processQueue() {
+//         while (arcBalanceQueue.length > 0) {
+//           const { provider, address, resolve, reject } = arcBalanceQueue.shift();
+//           try {
+//             const result = await provider.getBalance(address);
+//             resolve(result);
+//           } catch (e) {
+//             reject(e);
+//           }
+//           await new Promise(r => setTimeout(r, 110)); // 110ms between calls ≈ 9/sec
+//         }
+//         arcBalanceActive = false;
+//       })();
+//     }
+//   });
+// }
 let connectionDelay = 0; // Stagger connections to avoid rate limits
 
 export const getProvider = async (chain) => {
@@ -81,6 +106,7 @@ export const ensureAddressListener = async (chain, address, wss, clientState) =>
   if (addressListenerAttached.has(key)) {
     return;
   }
+  console.log(`[Listener] Connecting to ${chain} for address ${addressLower}...`);
   addressListenerAttached.add(key);
 
   if (chain === 'ARC-TESTNET') {
@@ -456,13 +482,13 @@ const attachArcNativeListener = async (chain, addressLower, wss, clientState, ke
     const provider = await getProvider(chain);
     console.log(`[Listener] Attaching native balance listener on ${chain} for address ${addressLower}...`);
 
-    const initialBalance = await provider.getBalance(addressLower);
+    const initialBalance = await arcRateLimitedGetBalance(provider, addressLower);
     nativeBalanceCache.set(key, initialBalance);
 
     provider.on('block', async (blockNumber) => {
       try {
         const prevBalance = nativeBalanceCache.get(key) ?? 0n;
-        const newBalance = await provider.getBalance(addressLower);
+        const newBalance = await arcRateLimitedGetBalance(provider, addressLower);
 
         if (newBalance <= prevBalance) {
           nativeBalanceCache.set(key, newBalance);
