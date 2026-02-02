@@ -1,6 +1,6 @@
 export const chainConfigs = {
   'ARC-TESTNET': {
-    wssUrl: 'wss://arc-testnet.g.alchemy.com/v2/' + process.env.ALCHEMY_KEY,
+    wssUrl: 'wss://rpc.testnet.arc.network',   //  wssUrl: 'wss://arc-testnet.g.alchemy.com/v2/' + process.env.ALCHEMY_KEY,
     usdcAddress: '0x3600000000000000000000000000000000000000'
   },
   'AVAX-FUJI': {

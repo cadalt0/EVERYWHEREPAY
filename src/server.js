@@ -3,8 +3,10 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { chainConfigs } from './config.js';
-import { ensureChainListener, isValidAddress } from './subscriptions.js';
+import { ensureAddressListener, isValidAddress } from './subscriptions.js';
 import { getUserByGmail } from './db.js';
+import { handleBridgeRequest } from './api/bridge.js';
+import { handleAttestationRequest } from './api/attest.js';
 
 const DEFAULT_PORT = process.env.PORT || 8090;
 
@@ -22,6 +24,25 @@ export const startServer = (port = DEFAULT_PORT) => {
     credentials: true
   }));
 
+  const clientState = new Map();
+  let clientCounter = 0;
+
+  const isEmailSubscribed = (email) => {
+    const target = (email || '').trim().toLowerCase();
+    if (!target) {
+      return false;
+    }
+    for (const [client, state] of clientState.entries()) {
+      if (client.readyState !== 1 || !state?.email) {
+        continue;
+      }
+      if (state.email.trim().toLowerCase() === target) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // HTTP REST endpoints
   app.get('/', (req, res) => {
     res.json({ 
@@ -30,7 +51,10 @@ export const startServer = (port = DEFAULT_PORT) => {
       endpoints: {
         websocket: 'ws://localhost:' + port,
         chains: '/api/chains',
-        health: '/api/health'
+        health: '/api/health',
+        wallets: '/api/wallets?email=',
+        bridge: '/api/bridge/:chain/:email',
+        attest: '/api/attest/:burnHash/:route/:email'
       }
     });
   });
@@ -68,12 +92,59 @@ export const startServer = (port = DEFAULT_PORT) => {
     }
   });
 
+  // Bridge API - Manual trigger to bridge all funds from chain to ARC-TESTNET
+  app.get('/api/bridge/:chain/:email', async (req, res) => {
+    const { chain, email } = req.params;
+    
+    if (!chain || !email) {
+      return res.status(400).json({ error: 'Missing chain or email parameter' });
+    }
+
+    try {
+      const result = await handleBridgeRequest(chain.toUpperCase(), email, isEmailSubscribed);
+      return res.status(200).json(result);
+    } catch (err) {
+      console.error('[API] Bridge request failed:', err);
+      return res.status(500).json({ 
+        success: false,
+        error: err.message || 'Bridge failed',
+        details: err.stack
+      });
+    }
+  });
+
+  // Attestation API - Manual attestation and mint for a burn transaction
+  app.get('/api/attest/:burnHash/:route/:email', async (req, res) => {
+    const { burnHash, route, email } = req.params;
+    
+    if (!burnHash || !route || !email) {
+      return res.status(400).json({ error: 'Missing burnHash, route, or email parameter' });
+    }
+
+    try {
+      const result = await handleAttestationRequest(burnHash, route, email, isEmailSubscribed);
+      return res.status(200).json(result);
+    } catch (err) {
+      console.error('[API] Attestation request failed:', err);
+      return res.status(500).json({ 
+        success: false,
+        error: err.message || 'Attestation failed',
+        details: err.stack
+      });
+    }
+  });
+
   // Create HTTP server
   const server = createServer(app);
 
   // Attach WebSocket server to HTTP server
   const wss = new WebSocketServer({ server });
-  const clientState = new Map();
+
+  // Add error handler for WebSocket server
+  wss.on('error', (error) => {
+    console.error('[WSS] WebSocket Server error:', error);
+    // Don't crash - server will continue running
+  });
 
   console.log(`HTTP + WebSocket server started on port ${port}`);
   console.log(`HTTP: http://localhost:${port}`);
@@ -89,22 +160,24 @@ export const startServer = (port = DEFAULT_PORT) => {
   }, 5000);
 
   wss.on('connection', (ws) => {
-    clientState.set(ws, { chains: new Set(), watchAddress: null, email: null });
+    const clientId = ++clientCounter;
+    clientState.set(ws, { id: clientId, chains: new Set(), watchAddress: null, email: null });
     ws.send(JSON.stringify({
       type: 'info',
       message: 'Connected. Send {"type":"subscribe","chain":"AVAX-FUJI","address":"0x..."} or {"type":"subscribe_all","address":"0x..."}.'
     }));
 
     ws.on('message', (raw) => {
-      let msg;
       try {
-        msg = JSON.parse(raw.toString());
-      } catch {
-        ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON message.' }));
-        return;
-      }
+        let msg;
+        try {
+          msg = JSON.parse(raw.toString());
+        } catch {
+          ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON message.' }));
+          return;
+        }
 
-      if (msg.type === 'subscribe') {
+        if (msg.type === 'subscribe') {
         const chain = msg.chain;
         const address = (msg.address || '').toLowerCase();
         const email = (msg.email || '').trim();
@@ -124,8 +197,13 @@ export const startServer = (port = DEFAULT_PORT) => {
         state.chains.add(chain);
         state.watchAddress = address;
         state.email = email;
-        ensureChainListener(chain, wss, clientState);
-        console.log(`Client subscribed: ${chain} - ${address} - ${email}`);
+        
+        // Start listener asynchronously (don't wait)
+        ensureAddressListener(chain, address, wss, clientState).catch(err => {
+          console.error(`[WS#${state.id}] Failed to attach listener for ${chain}:`, err);
+        });
+        
+        console.log(`[WS#${state.id}] Subscribed: ${chain} - ${address} - ${email}`);
         ws.send(JSON.stringify({ type: 'subscribed', chain, address, email }));
         return;
       }
@@ -143,13 +221,17 @@ export const startServer = (port = DEFAULT_PORT) => {
         }
         const state = clientState.get(ws);
         const allChains = Object.keys(chainConfigs);
-        allChains.forEach(chain => {
+        
+        // Attach listeners with staggered delays
+        allChains.forEach((chain, index) => {
           state.chains.add(chain);
-          ensureChainListener(chain, wss, clientState);
+          ensureAddressListener(chain, address, wss, clientState).catch(err => {
+            console.error(`[WS#${state.id}] Failed to attach listener for ${chain}:`, err);
+          });
         });
         state.watchAddress = address;
         state.email = email;
-        console.log(`Client subscribed to ALL chains - ${address} - ${email}`);
+        console.log(`[WS#${state.id}] Subscribed to ALL chains - ${address} - ${email}`);
         ws.send(JSON.stringify({ type: 'subscribed_all', chains: allChains, address, email }));
         return;
       }
@@ -159,15 +241,32 @@ export const startServer = (port = DEFAULT_PORT) => {
         state.chains.clear();
         state.watchAddress = null;
         state.email = null;
-        console.log('Client unsubscribed');
+        console.log(`[WS#${state.id}] Unsubscribed`);
         ws.send(JSON.stringify({ type: 'unsubscribed' }));
         return;
       }
 
       ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type.' }));
+      } catch (error) {
+        console.error('[WebSocket] Error handling message:', error);
+        try {
+          ws.send(JSON.stringify({ type: 'error', message: 'Internal server error processing message.' }));
+        } catch (sendError) {
+          console.error('[WebSocket] Failed to send error message:', sendError);
+        }
+      }
+    });
+
+    ws.on('error', (error) => {
+      console.error(`[WS#${clientId}] WebSocket error:`, error.message || error);
+      // Don't crash - connection will be cleaned up
     });
 
     ws.on('close', () => {
+      const state = clientState.get(ws);
+      if (state) {
+        console.log(`[WS#${state.id}] Client disconnected`);
+      }
       clientState.delete(ws);
     });
   });

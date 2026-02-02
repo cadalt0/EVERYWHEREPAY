@@ -31,7 +31,7 @@ export const ensureTxcomingTable = async () => {
       chain TEXT NOT NULL,
       sender TEXT NOT NULL,
       txtype TEXT NOT NULL DEFAULT 'IN',
-      status TEXT NOT NULL DEFAULT 'received',
+      status VARCHAR(500) NOT NULL DEFAULT 'received',
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       UNIQUE (mail, txhash)
     );
@@ -40,6 +40,7 @@ export const ensureTxcomingTable = async () => {
   await p.query(sql);
   await p.query('ALTER TABLE txcoming ADD COLUMN IF NOT EXISTS walletid TEXT;');
   await p.query('ALTER TABLE txcoming ADD COLUMN IF NOT EXISTS txtype TEXT DEFAULT \'IN\';');
+  await p.query('ALTER TABLE txcoming ALTER COLUMN status TYPE VARCHAR(500);');
   await p.query('CREATE UNIQUE INDEX IF NOT EXISTS txcoming_mail_txhash_uniq ON txcoming (mail, txhash);');
 };
 
@@ -74,4 +75,34 @@ export const getUserByGmail = async (email) => {
     }
   }
   return { walletSetId: row.walletSetId, addresses };
+};
+export const updateTxcomingStatus = async (txhash, newStatus, newChain = null) => {
+  await ensureTxcomingTable();
+  const p = getPool();
+  
+  if (newChain) {
+    const sql = `UPDATE txcoming SET status = $1, chain = $2 WHERE txhash = $3;`;
+    const result = await p.query(sql, [newStatus, newChain, txhash]);
+    return { updated: result.rowCount > 0 };
+  } else {
+    const sql = `UPDATE txcoming SET status = $1 WHERE txhash = $2;`;
+    const result = await p.query(sql, [newStatus, txhash]);
+    return { updated: result.rowCount > 0 };
+  }
+};
+
+export const getTransactionByBurnHash = async (burnHash) => {
+  await ensureTxcomingTable();
+  const p = getPool();
+  const sql = `SELECT * FROM txcoming WHERE txhash = $1 LIMIT 1;`;
+  const result = await p.query(sql, [burnHash]);
+  return result.rows.length > 0 ? result.rows[0] : null;
+};
+
+export const getLatestBridgedTransaction = async (email, amount) => {
+  await ensureTxcomingTable();
+  const p = getPool();
+  const sql = `SELECT * FROM txcoming WHERE mail = $1 AND amount = $2 AND status = 'bridged' ORDER BY created_at DESC LIMIT 1;`;
+  const result = await p.query(sql, [email, amount]);
+  return result.rows.length > 0 ? result.rows[0] : null;
 };
