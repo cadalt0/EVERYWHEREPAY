@@ -115,4 +115,12 @@ export const updatePreviousReceivedToBridged = async (email, currentId) => {
   return { updated: result.rowCount };
 };
 
+export const updatePreviousStuckGToCompleted = async (email, currentId) => {
+  await ensureTxcomingTable();
+  const p = getPool();
+  const sql = `UPDATE txcoming SET status = 'completed' WHERE mail = $1 AND status = 'STUCK_G' AND id < $2;`;
+  const result = await p.query(sql, [email, currentId]);
+  return { updated: result.rowCount };
+};
+
 export { getPool };

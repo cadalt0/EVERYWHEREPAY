@@ -4,7 +4,7 @@
  * Gateway deposit is only done here if no WebSocket subscriber exists
  */
 
-import { getUserByGmail, saveTxcoming, updateTxcomingStatus, updatePreviousReceivedToBridged, getPool } from '../db.js';
+import { getUserByGmail, saveTxcoming, updateTxcomingStatus, updatePreviousReceivedToBridged, getPool, updatePreviousStuckGToCompleted } from '../db.js';
 import { bridgeToArc } from '../bridge/engine.js';
 import { depositToGatewayWallet } from '../gateway/deposit.js';
 import { getUsdcBalance } from './helpers.js';
@@ -51,7 +51,6 @@ export async function handleBridgeRequest(chain, email, isEmailSubscribed) {
     // Check if funds are already on ARC-TESTNET
     if (chain === 'ARC-TESTNET') {
       console.log(`[API Bridge] Step 3: Funds already on ARC-TESTNET...`);
-      
       // Create DB entry to track this
       const depositTxId = `deposit_${Date.now()}`;
       await saveTxcoming({
@@ -64,9 +63,16 @@ export async function handleBridgeRequest(chain, email, isEmailSubscribed) {
         txtype: 'IN',
         status: 'received'
       });
-      
+      // Get the inserted row's id
+      const pool = getPool();
+      const idRes = await pool.query('SELECT id FROM txcoming WHERE mail = $1 AND txhash = $2 LIMIT 1;', [email, depositTxId]);
+      const depositRowId = idRes.rows[0]?.id;
+      if (depositRowId) {
+        // Update all previous 'STUCK_G' rows for this user to 'completed'
+        const updateResult = await updatePreviousStuckGToCompleted(email, depositRowId);
+        console.log(`[API Bridge] Updated ${updateResult.updated} previous 'STUCK_G' rows to 'completed' for user ${email}`);
+      }
       burnTxHash = depositTxId;
-
       // Always deposit to Gateway for API calls
       console.log('[API Bridge] Step 4: Depositing to Gateway Wallet...');
       try {
