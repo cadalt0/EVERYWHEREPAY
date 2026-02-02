@@ -4,7 +4,7 @@
  * Gateway deposit is only done here if no WebSocket subscriber exists
  */
 
-import { getUserByGmail, saveTxcoming, updateTxcomingStatus } from '../db.js';
+import { getUserByGmail, saveTxcoming, updateTxcomingStatus, updatePreviousReceivedToBridged, getPool } from '../db.js';
 import { bridgeToArc } from '../bridge/engine.js';
 import { depositToGatewayWallet } from '../gateway/deposit.js';
 import { getUsdcBalance } from './helpers.js';
@@ -95,9 +95,8 @@ export async function handleBridgeRequest(chain, email, isEmailSubscribed) {
             onBurnConfirmed: async (burnHash, fromChain) => {
               burnTxHash = burnHash;
               console.log('[API Bridge] Burn confirmed, creating DB entry...');
-              
               // Create new row in txcoming with burn hash
-              await saveTxcoming({
+              const saveResult = await saveTxcoming({
                 mail: email,
                 walletid: user.walletSetId,
                 txhash: burnHash,
@@ -107,6 +106,15 @@ export async function handleBridgeRequest(chain, email, isEmailSubscribed) {
                 txtype: 'IN',
                 status: 'settling'
               });
+              // Get the inserted row's id
+              const pool = getPool();
+              const idRes = await pool.query('SELECT id FROM txcoming WHERE mail = $1 AND txhash = $2 LIMIT 1;', [email, burnHash]);
+              const burnRowId = idRes.rows[0]?.id;
+              if (burnRowId) {
+                // Update all previous 'received' rows for this user to 'bridged'
+                const updateResult = await updatePreviousReceivedToBridged(email, burnRowId);
+                console.log(`[API Bridge] Updated ${updateResult.updated} previous 'received' rows to 'bridged' for user ${email}`);
+              }
               console.log('[API Bridge] DB entry created with status: settling');
             }
           },
@@ -142,7 +150,7 @@ export async function handleBridgeRequest(chain, email, isEmailSubscribed) {
         if (burnTxHash) {
           console.error(`[API Bridge] Bridge failed after burn, setting status to stuck`);
           await updateTxcomingStatus(burnTxHash, 'stuck');
-          error.burnTxHash = burnTxHash;
+          bridgeError.burnTxHash = burnTxHash;
         }
         throw bridgeError;
       }

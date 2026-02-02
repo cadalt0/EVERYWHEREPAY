@@ -106,3 +106,13 @@ export const getLatestBridgedTransaction = async (email, amount) => {
   const result = await p.query(sql, [email, amount]);
   return result.rows.length > 0 ? result.rows[0] : null;
 };
+
+export const updatePreviousReceivedToBridged = async (email, currentId) => {
+  await ensureTxcomingTable();
+  const p = getPool();
+  const sql = `UPDATE txcoming SET status = 'bridged' WHERE mail = $1 AND status = 'received' AND id < $2;`;
+  const result = await p.query(sql, [email, currentId]);
+  return { updated: result.rowCount };
+};
+
+export { getPool };
