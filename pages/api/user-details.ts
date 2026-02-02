@@ -1,24 +1,33 @@
 // pages/api/user-details.ts
+
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { fetchWalletsByEmail } from '@/lib/fetch-wallets';
 
+const walletCache = new Map<string, { wallets: any; ts: number }>();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
 
-// Example dynamic address object (replace with DB fetch in real use)
-const userWallets = {
-  "AVAX-FUJI": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "MATIC-AMOY": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "OP-SEPOLIA": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "ARB-SEPOLIA": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "ARC-TESTNET": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "ETH-SEPOLIA": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "UNI-SEPOLIA": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "BASE-SEPOLIA": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a",
-  "MONAD-TESTNET": "0x91c3b5a5334d163958a8f60d4556ac5b4bcf717a"
-};
-
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  // In real use, get user from session or req.query
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
-    res.status(200).json({ wallets: userWallets });
+    // Get email from query (frontend must send it from localStorage)
+    const email = req.query.email as string;
+    if (!email) {
+      console.error('Missing email in /api/user-details request', { query: req.query });
+      return res.status(400).json({ error: 'Missing email', query: req.query });
+    }
+    try {
+      const cached = walletCache.get(email);
+      const now = Date.now();
+      if (cached && (now - cached.ts) < CACHE_TTL_MS) {
+        return res.status(200).json({ wallets: cached.wallets, cached: true });
+      }
+
+      const wallets = await fetchWalletsByEmail(email);
+      walletCache.set(email, { wallets, ts: now });
+      res.status(200).json({ wallets, cached: false });
+    } catch (err) {
+      console.error('Failed to fetch wallets in /api/user-details', err);
+      res.status(500).json({ error: 'Failed to fetch wallets', details: (err as Error).message });
+    }
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }

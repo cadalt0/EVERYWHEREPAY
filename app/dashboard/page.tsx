@@ -1,4 +1,11 @@
+
 'use client';
+// Add global type for wallet cache
+declare global {
+  interface Window {
+    __userWallets?: Array<{ chain: string; address: string }>;
+  }
+}
 
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -13,6 +20,7 @@ import Link from 'next/link';
 import DashboardAuthChecker from './page-client-auth';
 import GoogleUserLogger from './page-client-google-user';
 import { toast } from '@/hooks/use-toast';
+import { getUserWallets } from '@/lib/client-wallets';
 
 export default function DashboardPage() {
   const [openModals, setOpenModals] = useState({
@@ -22,20 +30,30 @@ export default function DashboardPage() {
   });
   const [wallets, setWallets] = useState<Array<{ chain: string; address: string }>>([]);
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
+  const [isWalletsLoading, setIsWalletsLoading] = useState(false);
 
   useEffect(() => {
-    // Fetch user details (wallets) on dashboard load
-    fetch('/api/user-details')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.wallets && typeof data.wallets === 'object' && !Array.isArray(data.wallets)) {
-          // Convert object to array
-          const arr = Object.entries(data.wallets).map(([chain, address]) => ({ chain, address }));
-          setWallets(arr);
-        } else if (Array.isArray(data.wallets)) {
-          setWallets(data.wallets);
-        }
-      });
+    // Fetch user wallets once (deduped + cached)
+    let email = null;
+    if (typeof window !== 'undefined') {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          email = user.email;
+        } catch {}
+      }
+    }
+    if (!email) {
+      setWallets([]);
+      return;
+    }
+    setIsWalletsLoading(true);
+    getUserWallets(email)
+      .then((arr) => {
+        setWallets(arr);
+      })
+      .finally(() => setIsWalletsLoading(false));
   }, []);
 
   const toggleModal = (modal: keyof typeof openModals) => {
@@ -49,24 +67,8 @@ export default function DashboardPage() {
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar title="Dashboard" selectedChain={selectedChain}>
-          <button
-            onClick={() => {
-              localStorage.removeItem('user');
-              toast({
-                title: 'Logged out',
-                description: 'You have been logged out.',
-                variant: 'default',
-              });
-              setTimeout(() => {
-                window.location.href = '/auth/login';
-              }, 800);
-            }}
-            className="ml-auto px-4 py-2 bg-destructive text-destructive-foreground rounded-lg font-mono font-bold hover:bg-destructive/80 transition-colors"
-          >
-            Logout
-          </button>
-        </Topbar>
+        <Topbar title="Dashboard" selectedChain={selectedChain} />
+        {/* Removed duplicate logout button; use sidebar/settings for logout */}
 
         <main className="flex-1 overflow-auto">
           <div className="p-4 md:p-8 space-y-8">
@@ -130,7 +132,6 @@ export default function DashboardPage() {
 
             {/* Recent Activity */}
             <div>
-              <h2 className="text-lg font-bold font-mono mb-4">Recent Activity</h2>
               <TransactionTable />
             </div>
           </div>
@@ -151,6 +152,7 @@ export default function DashboardPage() {
         wallets={wallets}
         selectedChain={selectedChain}
         setSelectedChain={setSelectedChain}
+        isLoading={isWalletsLoading}
       />
       <RequestModal
         isOpen={openModals.request}

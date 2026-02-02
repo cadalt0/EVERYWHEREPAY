@@ -48,74 +48,27 @@ const chainConfigs = {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { chainId, address, fromTimestamp } = req.query;
+  const { chainId, address } = req.query;
   if (!chainId || !address) {
     const errorResp = { error: 'Missing chainId or address' };
     console.log('API response:', errorResp);
     return res.status(400).json(errorResp);
   }
+
   const config = chainConfigs[chainId as keyof typeof chainConfigs];
   if (!config) {
     const errorResp = { error: 'Unsupported chain' };
     console.log('API response:', errorResp);
     return res.status(400).json(errorResp);
   }
+
   try {
-    console.log(`Checking USDC for address: ${address} on chain: ${chainId}`);
+    console.log(`Checking USDC balance for address: ${address} on chain: ${chainId}`);
     const provider = new ethers.JsonRpcProvider(config.rpcUrl);
     const usdc = new ethers.Contract(config.usdcAddress, ERC20_ABI, provider);
-    // Only return the latest USDC transfer to this address after fromTimestamp (if provided)
-    const filter = {
-      address: config.usdcAddress,
-      topics: [
-        ethers.id('Transfer(address,address,uint256)'),
-        null,
-        ethers.zeroPadValue(address, 32)
-      ]
-    };
-    let fromBlock = 'latest';
-    if (fromTimestamp) {
-      // Estimate block number from timestamp
-      const ts = Number(fromTimestamp);
-      const latestBlock = await provider.getBlock('latest');
-      let block = latestBlock.number;
-      // Walk back to find a block with timestamp <= fromTimestamp
-      while (block > 0) {
-        const b = await provider.getBlock(block);
-        if (b.timestamp <= ts) break;
-        block -= 10; // step back 10 blocks at a time for speed
-      }
-      fromBlock = block;
-    }
-    const logs = await provider.getLogs({ ...filter, fromBlock, toBlock: 'latest' });
-    // Only consider logs after fromTimestamp
-    let foundLog = null;
-    let txHash = '';
-    let fromWho = '';
-    let amount = '';
-    if (logs.length > 0) {
-      for (let i = logs.length - 1; i >= 0; i--) {
-        const log = logs[i];
-        const blockTs = (await provider.getBlock(log.blockNumber)).timestamp;
-        if (!fromTimestamp || blockTs >= Number(fromTimestamp)) {
-          foundLog = log;
-          break;
-        }
-      }
-      if (foundLog) {
-        txHash = foundLog.transactionHash;
-        fromWho = '0x' + foundLog.topics[1].slice(26);
-        // decode amount from log.data
-        const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['uint256'], foundLog.data);
-        amount = (Number(decoded[0]) / 1e6).toString();
-      }
-    }
-    let resp;
-    if (foundLog) {
-      resp = { result: `${amount}:${txHash}:${chainId}:${fromWho}` };
-    } else {
-      resp = { result: 'NA' };
-    }
+    const balance = await usdc.balanceOf(address);
+    const formatted = ethers.formatUnits(balance, 6);
+    const resp = { balance: formatted };
     console.log('API response:', resp);
     return res.status(200).json(resp);
   } catch (err) {

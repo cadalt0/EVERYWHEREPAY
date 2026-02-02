@@ -2,12 +2,12 @@
 
 import { Bell, User } from 'lucide-react';
 import { ThemeToggle } from '../theme-toggle';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 
 import { chains } from '@/lib/mock-data';
 
 interface TopbarProps {
-  title: string;
+  title: string | ReactNode;
   selectedChain?: string | null;
 }
 
@@ -24,6 +24,11 @@ export function Topbar({ title, selectedChain }: TopbarProps) {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Check current global buffering state when component mounts
+      const isCurrentlyBuffering = (window as any).__usdcBuffering === true;
+      setIsBuffering(isCurrentlyBuffering);
+      
+      // Listen for buffering changes
       const handler = (e: CustomEvent) => setIsBuffering(e.detail === true);
       window.addEventListener('usdc-buffering', handler as EventListener);
       return () => window.removeEventListener('usdc-buffering', handler as EventListener);
@@ -54,9 +59,9 @@ export function Topbar({ title, selectedChain }: TopbarProps) {
               <span className="inline-flex items-center justify-center rounded-full bg-muted relative" style={{ width: 40, height: 40 }}>
                 {isBuffering && (
                   <span className="absolute inset-0 flex items-center justify-center animate-spin">
-                    <svg className="w-12 h-12 text-primary/40" viewBox="0 0 24 24">
-                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <svg className="w-[115%] h-[115%] text-accent/40" viewBox="0 0 24 24">
+                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                      <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="2" fill="none" />
                     </svg>
                   </span>
                 )}
@@ -67,7 +72,17 @@ export function Topbar({ title, selectedChain }: TopbarProps) {
                 />
               </span>
             ) : (
-              <Bell className="w-4 md:w-5 h-4 md:h-5" />
+              <>
+                {isBuffering && (
+                  <span className="absolute inset-0 flex items-center justify-center animate-spin">
+                    <svg className="w-[110%] h-[110%] text-accent/40" viewBox="0 0 24 24">
+                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                      <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="2" fill="none" />
+                    </svg>
+                  </span>
+                )}
+                <Bell className="w-4 md:w-5 h-4 md:h-5" />
+              </>
             )}
             <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full"></span>
           </button>

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, FileText, Wallet, Settings, LogOut, ChevronLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useLayoutEffect } from 'react';
 import { SettingsModal } from '@/components/dashboard/modals/settings-modal';
 
 const navItems = [
@@ -18,15 +18,37 @@ import { Plus, Send, Share2 } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+
+  // Load saved sidebar state synchronously before first render to prevent flash
+  useLayoutEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebarCollapsed');
+      setIsCollapsed(saved !== null ? JSON.parse(saved) : false);
+    }
+  }, []);
+
+  // Save sidebar state to localStorage when it changes
+  const handleToggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebarCollapsed', JSON.stringify(newState));
+    }
+  };
+
+  // Don't render until state is hydrated from localStorage
+  if (isCollapsed === null) {
+    return null;
+  }
 
   return (
     <>
       {/* Mobile Toggle Button */}
       <div className="hidden md:hidden fixed top-20 left-4 z-40">
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={handleToggleSidebar}
           className="p-2 hover:bg-muted rounded-lg transition-colors"
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -51,7 +73,7 @@ export function Sidebar() {
             {!isCollapsed && 'EVERYWHEREPAY'}
           </Link>
           <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={handleToggleSidebar}
             className="p-1 hover:bg-muted rounded transition-colors hidden lg:block"
             style={{ marginLeft: isCollapsed ? 0 : 'auto' }}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -115,7 +137,7 @@ export function Sidebar() {
               EVERYWHEREPAY
             </Link>
             <button
-              onClick={() => setIsCollapsed(false)}
+              onClick={handleToggleSidebar}
               className="p-1 hover:bg-muted rounded transition-colors"
               aria-label="Close sidebar"
             >
@@ -131,7 +153,6 @@ export function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setIsCollapsed(false)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg font-mono transition-all ${
                     isActive
                       ? 'bg-primary text-primary-foreground'
@@ -147,10 +168,7 @@ export function Sidebar() {
 
           <div className="px-4 py-6 border-t border-border space-y-2">
             <button
-              onClick={() => {
-                setShowSettings(true);
-                setIsCollapsed(false);
-              }}
+              onClick={() => setShowSettings(true)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-muted transition-colors font-mono text-sm"
             >
               <Settings className="w-4 h-4" />

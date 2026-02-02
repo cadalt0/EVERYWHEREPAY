@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-const forge = require('node-forge');
 
 dotenv.config();
 
