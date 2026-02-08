@@ -60,7 +60,7 @@ export const saveTxcoming = async ({ mail, walletid, txhash, amount, chain, send
 
 export const getUserByGmail = async (email) => {
   const p = getPool();
-  const sql = `SELECT "walletSetId", addresses FROM everywherepay WHERE gmail = $1 LIMIT 1;`;
+  const sql = `SELECT "walletSetId", addresses, wallet FROM everywherepay WHERE gmail = $1 LIMIT 1;`;
   const result = await p.query(sql, [email]);
   if (!result.rows || result.rows.length === 0) {
     return null;
@@ -74,7 +74,7 @@ export const getUserByGmail = async (email) => {
       addresses = null;
     }
   }
-  return { walletSetId: row.walletSetId, addresses };
+  return { walletSetId: row.walletSetId, addresses, wallet: row.wallet };
 };
 export const updateTxcomingStatus = async (txhash, newStatus, newChain = null) => {
   await ensureTxcomingTable();
@@ -107,19 +107,19 @@ export const getLatestBridgedTransaction = async (email, amount) => {
   return result.rows.length > 0 ? result.rows[0] : null;
 };
 
-export const updatePreviousReceivedToBridged = async (email, currentId) => {
+export const updatePreviousReceivedToBridged = async (email, chain, currentId) => {
   await ensureTxcomingTable();
   const p = getPool();
-  const sql = `UPDATE txcoming SET status = 'bridged' WHERE mail = $1 AND status = 'received' AND id < $2;`;
-  const result = await p.query(sql, [email, currentId]);
+  const sql = `UPDATE txcoming SET status = 'bridged' WHERE mail = $1 AND chain = $2 AND status = 'received' AND id < $3;`;
+  const result = await p.query(sql, [email, chain, currentId]);
   return { updated: result.rowCount };
 };
 
-export const updatePreviousStuckGToCompleted = async (email, currentId) => {
+export const updatePreviousStuckGToCompleted = async (email, chain, currentId) => {
   await ensureTxcomingTable();
   const p = getPool();
-  const sql = `UPDATE txcoming SET status = 'completed' WHERE mail = $1 AND status = 'STUCK_G' AND id < $2;`;
-  const result = await p.query(sql, [email, currentId]);
+  const sql = `UPDATE txcoming SET status = 'completed' WHERE mail = $1 AND chain = $2 AND status = 'STUCK_G' AND id < $3;`;
+  const result = await p.query(sql, [email, chain, currentId]);
   return { updated: result.rowCount };
 };
 

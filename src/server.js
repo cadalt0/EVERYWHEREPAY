@@ -7,6 +7,10 @@ import { ensureAddressListener, isValidAddress } from './subscriptions.js';
 import { getUserByGmail } from './db.js';
 import { handleBridgeRequest } from './api/bridge.js';
 import { handleAttestationRequest } from './api/attest.js';
+import { handleTransferOutRequest } from './api/transferOutHandler.js';
+import { handleCreateRequest } from './api/transferOutHandler.js';
+import { handleGetRequestById } from './api/transferOutHandler.js';
+
 
 const DEFAULT_PORT = process.env.PORT || 8090;
 
@@ -23,6 +27,15 @@ export const startServer = (port = DEFAULT_PORT) => {
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true
   }));
+  // Transfer Out API - Arc to [Avalanche Fuji, Base Sepolia, Ethereum Sepolia, Arc]
+  // Usage: /api/transfer-out/:mail/:recipientAddress/:chain?amount=AMOUNT
+  app.get('/api/transfer-out/:mail/:recipientAddress/:chain', handleTransferOutRequest);
+  // Public API to create a new request
+  // Usage: /request/:requestid/:user/:amount/:message
+  app.post('/request/:requestid/:user/:amount/:message', handleCreateRequest);
+  // Public API to get request details by requestid
+  // Usage: /request/:requestid
+  app.get('/request/:requestid', handleGetRequestById);
 
   const clientState = new Map();
   let clientCounter = 0;

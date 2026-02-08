@@ -68,9 +68,9 @@ export async function handleBridgeRequest(chain, email, isEmailSubscribed) {
       const idRes = await pool.query('SELECT id FROM txcoming WHERE mail = $1 AND txhash = $2 LIMIT 1;', [email, depositTxId]);
       const depositRowId = idRes.rows[0]?.id;
       if (depositRowId) {
-        // Update all previous 'STUCK_G' rows for this user to 'completed'
-        const updateResult = await updatePreviousStuckGToCompleted(email, depositRowId);
-        console.log(`[API Bridge] Updated ${updateResult.updated} previous 'STUCK_G' rows to 'completed' for user ${email}`);
+        // Update all previous 'STUCK_G' rows for this user and chain to 'completed'
+        const updateResult = await updatePreviousStuckGToCompleted(email, chain, depositRowId);
+        console.log(`[API Bridge] Updated ${updateResult.updated} previous 'STUCK_G' rows to 'completed' for user ${email} on chain ${chain}`);
       }
       burnTxHash = depositTxId;
       // Always deposit to Gateway for API calls
@@ -117,9 +117,9 @@ export async function handleBridgeRequest(chain, email, isEmailSubscribed) {
               const idRes = await pool.query('SELECT id FROM txcoming WHERE mail = $1 AND txhash = $2 LIMIT 1;', [email, burnHash]);
               const burnRowId = idRes.rows[0]?.id;
               if (burnRowId) {
-                // Update all previous 'received' rows for this user to 'bridged'
-                const updateResult = await updatePreviousReceivedToBridged(email, burnRowId);
-                console.log(`[API Bridge] Updated ${updateResult.updated} previous 'received' rows to 'bridged' for user ${email}`);
+                // Update all previous 'received' rows for this user and chain to 'bridged'
+                const updateResult = await updatePreviousReceivedToBridged(email, chain, burnRowId);
+                console.log(`[API Bridge] Updated ${updateResult.updated} previous 'received' rows to 'bridged' for user ${email} on chain ${chain}`);
               }
               console.log('[API Bridge] DB entry created with status: settling');
             }
