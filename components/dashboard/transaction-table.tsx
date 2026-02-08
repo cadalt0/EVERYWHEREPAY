@@ -91,8 +91,8 @@ export function TransactionTable() {
           setTransactions(finalTxs);
         }
 
-        // If we got fewer filtered results than requested, there are no more transactions
-        if (filtered.length < limit) {
+        // Only set hasMore to false if the API returned less than requested (raw, not filtered)
+        if (data.transactions.length < (Math.max(limit * 3, limit + 3))) {
           setHasMore(false);
         }
 
@@ -111,15 +111,13 @@ export function TransactionTable() {
 
   useEffect(() => {
     console.log('[TransactionTable] useEffect triggered, isConnected:', isConnected);
-    
     // Wait for WebSocket to connect, then wait 2 seconds before fetching
     if (isConnected) {
       console.log('[TransactionTable] WebSocket is connected, starting 2 second timer...');
       const timer = setTimeout(() => {
         console.log('[TransactionTable] Timer completed, fetching transactions...');
-        fetchTransactions(0);
+        fetchTransactions(0, 5);
       }, 2000);
-
       return () => clearTimeout(timer);
     }
   }, [isConnected]);
@@ -512,6 +510,7 @@ export function TransactionTable() {
                       >
                         {getStatusLabel(tx.status)}
                       </span>
+                      {/* Wand for stuck */}
                       {tx.status.trim().toLowerCase() === 'stuck' && (
                         <button
                           onClick={(e) => {
@@ -532,6 +531,7 @@ export function TransactionTable() {
                           )}
                         </button>
                       )}
+                      {/* Wand for stuck_g */}
                       {tx.status.trim().toLowerCase() === 'stuck_g' && (
                         <button
                           onClick={async (e) => {
@@ -562,6 +562,44 @@ export function TransactionTable() {
                           )}
                         </button>
                       )}
+                      {/* Wand for received if >5min old */}
+                      {tx.status.trim().toLowerCase() === 'received' && (() => {
+                        const updated = new Date(tx.createdAt);
+                        const now = new Date();
+                        const diffMs = now.getTime() - updated.getTime();
+                        if (diffMs > 5 * 60 * 1000) {
+                          return (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setAttesting(tx.txhash);
+                                const userStr = localStorage.getItem('user');
+                                const email = userStr ? JSON.parse(userStr).email : null;
+                                const settleApiUrl = process.env.NEXT_PUBLIC_SETTLE_API_URL || 'http://localhost:8090';
+                                try {
+                                  const url = `${settleApiUrl}/api/bridge/${tx.chain}/${encodeURIComponent(email)}`;
+                                  await fetch(url, { method: 'GET' });
+                                } finally {
+                                  setAttesting(null);
+                                }
+                              }}
+                              disabled={attesting === tx.txhash}
+                              className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Settle funds on chain"
+                            >
+                              {attesting === tx.txhash ? (
+                                <svg className="w-4 h-4 text-orange-500 animate-spin" viewBox="0 0 24 24">
+                                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                                  <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="2" fill="none" />
+                                </svg>
+                              ) : (
+                                <Wand2 className="w-4 h-4 text-orange-500" />
+                              )}
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </td>
                   <td className="hidden sm:table-cell px-3 md:px-6 py-3 md:py-4">

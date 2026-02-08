@@ -34,14 +34,35 @@ export function useWebSocketNotifications({ wallets, enabled = true }: WebSocket
 
     ws.onopen = () => {
       console.log('WebSocket connected - subscribing to all chains');
-      
+
       // Get the EVM address (same for all chains)
       const evmAddress = wallets.length > 0 ? wallets[0].address : '';
-      
-      // Subscribe to single address for all chains
+
+      // Get email from localStorage
+      let email = '';
+      try {
+        if (typeof window !== 'undefined') {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            email = user?.email || '';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse user from localStorage', e);
+      }
+
+      if (!email) {
+        console.error('WebSocket subscribe aborted: missing email address');
+        ws.close();
+        return;
+      }
+
+      // Subscribe to single address for all chains, with email
       ws.send(JSON.stringify({
         type: 'subscribe_all',
-        address: evmAddress
+        address: evmAddress,
+        email
       }));
     };
 

@@ -7,14 +7,59 @@ import { Copy, Check } from 'lucide-react';
 
 export default function RequestPage() {
   const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
+  const [message, setMessage] = useState('');
   const [requestId, setRequestId] = useState<string | null>(null);
   const [copiedRequestId, setCopiedRequestId] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const createRequest = () => {
+  function generateRequestId() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let id = '';
+    for (let i = 0; i < 10; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+    return id;
+  }
+
+  const createRequest = async () => {
+    setError(null);
     if (!amount) return;
-    const id = Math.random().toString(36).substring(2, 11).toUpperCase();
-    setRequestId(id);
+    const id = generateRequestId();
+    let email = null;
+    if (typeof window !== 'undefined') {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          email = user.email || null;
+        } catch {}
+      }
+    }
+    if (!email) {
+      setError('User email not found. Please log in again.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_SETTLE_API_URL?.trim() || '';
+      const msg = message && message.trim() ? message : 'everywherepay';
+      const url = `${baseUrl}/request/${id}/${email}/${amount}/${encodeURIComponent(msg)}`;
+      const res = await fetch(url, { method: 'POST' });
+      if (!res.ok) {
+        setError('Failed to create request.');
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      if (data && data.success && data.request && data.request.requestid) {
+        setRequestId(data.request.requestid);
+      } else {
+        setError('Failed to create request.');
+      }
+    } catch (err) {
+      setError('Failed to create request.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copyRequestLink = () => {
@@ -38,7 +83,6 @@ export default function RequestPage() {
               {!requestId ? (
                 <>
                   <h1 className="text-2xl font-bold font-mono mb-8">Create Payment Request</h1>
-
                   <div className="space-y-6">
                     <div>
                       <label className="text-sm font-mono text-muted-foreground mb-2 block">
@@ -52,52 +96,35 @@ export default function RequestPage() {
                         className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-lg"
                       />
                     </div>
-
                     <div>
                       <label className="text-sm font-mono text-muted-foreground mb-2 block">
-                        Note (optional)
+                        Message (optional)
                       </label>
                       <textarea
-                        placeholder="Invoice #123, Project milestone payment, etc."
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="Payment for services, invoice #123, etc."
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
                         className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm resize-none"
                         rows={4}
                       />
                     </div>
-
+                    {error && <div className="text-red-500 font-mono text-sm">{error}</div>}
                     <div className="flex gap-3 pt-6 border-t border-border">
-                      <button className="flex-1 py-3 border border-border rounded-lg font-mono hover:bg-muted transition-colors">
+                      <button className="flex-1 py-3 border border-border rounded-lg font-mono hover:bg-muted transition-colors" disabled={loading}>
                         Cancel
                       </button>
                       <button
                         onClick={createRequest}
                         className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg font-mono font-bold hover:opacity-90 transition-opacity"
+                        disabled={loading}
                       >
-                        Create Request
+                        {loading ? 'Creating...' : 'Create Request'}
                       </button>
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="space-y-6">
-                  <div>
-                    <p className="text-sm text-green-600 dark:text-green-400 font-mono mb-2">✓ Request Created Successfully</p>
-                    <h2 className="text-2xl font-bold font-mono">Payment Request: {requestId}</h2>
-                  </div>
-
-                  <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-                    <p className="text-xs text-muted-foreground font-mono uppercase">Amount Requested</p>
-                    <p className="text-2xl font-bold font-mono">${parseFloat(amount).toLocaleString()}</p>
-                  </div>
-
-                  {note && (
-                    <div className="p-4 bg-muted/50 rounded-lg">
-                      <p className="text-xs text-muted-foreground font-mono uppercase mb-2">Note</p>
-                      <p className="font-mono text-sm">{note}</p>
-                    </div>
-                  )}
-
                   <div className="p-4 border border-border rounded-lg space-y-3">
                     <p className="text-sm font-mono font-semibold">Share this link:</p>
                     <div className="flex items-center gap-2 bg-background p-3 rounded border border-border">
@@ -116,20 +143,16 @@ export default function RequestPage() {
                       </button>
                     </div>
                   </div>
-
                   <div className="flex gap-3 pt-6 border-t border-border">
                     <button
                       onClick={() => {
                         setRequestId(null);
                         setAmount('');
-                        setNote('');
+                        setMessage('');
                       }}
                       className="flex-1 py-3 border border-border rounded-lg font-mono hover:bg-muted transition-colors"
                     >
                       Create Another
-                    </button>
-                    <button className="flex-1 py-3 bg-primary text-primary-foreground rounded-lg font-mono font-bold hover:opacity-90 transition-opacity">
-                      View Requests
                     </button>
                   </div>
                 </div>

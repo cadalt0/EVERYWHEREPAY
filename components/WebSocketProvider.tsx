@@ -49,6 +49,24 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     const connectWebSocket = (wallets: Array<{ chain: string; address: string }>) => {
       if (!wallets || wallets.length === 0) return;
 
+      let email = '';
+      try {
+        if (typeof window !== 'undefined') {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            email = user?.email || '';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse user from localStorage', e);
+      }
+
+      if (!email) {
+        console.error('WebSocket connection aborted: missing email address');
+        return;
+      }
+
       const wsUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
       if (!wsUrl) {
         console.error('NEXT_PUBLIC_SOCKET_URL not configured');
@@ -67,7 +85,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('Connecting WebSocket...');
-      
+
       // Update global buffering state
       if (typeof window !== 'undefined') {
         (window as any).__usdcBuffering = true;
@@ -84,20 +102,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         // Get EVM address (same for all chains)
         const evmAddress = wallets.length > 0 ? wallets[0].address : '';
 
-        let email = '';
-        try {
-          if (typeof window !== 'undefined') {
-            const userStr = localStorage.getItem('user');
-            if (userStr) {
-              const user = JSON.parse(userStr);
-              email = user?.email || '';
-            }
-          }
-        } catch (e) {
-          console.error('Failed to parse user from localStorage', e);
-        }
-
-        // Subscribe to all chains
+        // Subscribe to all chains, email is required
         ws.send(JSON.stringify({
           type: 'subscribe_all',
           address: evmAddress,

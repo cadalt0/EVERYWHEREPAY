@@ -44,6 +44,10 @@ export default function LoginPage() {
     if (typeof window === 'undefined') return;
     // 1. Check for user in localStorage
     const userStr = localStorage.getItem('user');
+    // 2. Check if in the middle of Google OAuth callback
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
     if (userStr) {
       // Always show toast and delay redirect, even on first render
       setTimeout(() => {
@@ -57,7 +61,8 @@ export default function LoginPage() {
         }, 300);
       }, 100); // slight delay to ensure Toaster is mounted
       return;
-    } else {
+    } else if (!accessToken) {
+      // Only show 'Login not found' if not in the middle of Google OAuth callback
       setTimeout(() => {
         toast({
           title: 'Login not found',
@@ -66,10 +71,7 @@ export default function LoginPage() {
         });
       }, 100);
     }
-    // 2. Handle Google OAuth callback
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const accessToken = params.get('access_token');
+    // 3. Handle Google OAuth callback
     if (accessToken) {
       setGoogleLoading(true);
       // Remove the token from the URL for cleanliness
@@ -88,7 +90,15 @@ export default function LoginPage() {
             if (checkData.exists) {
               // Save user info to localStorage
               localStorage.setItem('user', JSON.stringify(user));
-              router.push('/dashboard');
+              // Wait for wallets to be available before redirecting
+              try {
+                const { getUserWallets } = await import('@/lib/client-wallets');
+                await getUserWallets(user.email);
+              } catch (e) {
+                console.error('Failed to fetch wallets after login', e);
+              }
+              // Force reload after redirect to ensure all state is fresh
+              window.location.href = '/dashboard?reload=1';
               return;
             }
             // 2. Create Circle wallets (backend) if not exists
@@ -108,8 +118,15 @@ export default function LoginPage() {
             }
             // Save user info to localStorage
             localStorage.setItem('user', JSON.stringify(user));
-            // 3. Only redirect if all succeed
-            router.push('/dashboard');
+            // Wait for wallets to be available before redirecting
+            try {
+              const { getUserWallets } = await import('@/lib/client-wallets');
+              await getUserWallets(user.email);
+            } catch (e) {
+              console.error('Failed to fetch wallets after wallet creation', e);
+            }
+            // Force reload after redirect to ensure all state is fresh
+            window.location.href = '/dashboard?reload=1';
           } catch (err) {
             setGoogleLoading(false);
             toast({

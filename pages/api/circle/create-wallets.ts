@@ -40,6 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     "OP-SEPOLIA",
     "MATIC-AMOY",
     "UNI-SEPOLIA",
+    
   ];
   if (!email) return res.status(400).json({ error: 'Missing email' });
   try {

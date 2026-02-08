@@ -8,6 +8,7 @@ declare global {
 }
 
 import { useState, useEffect } from 'react';
+import { useWebSocketNotifications } from '@/hooks/use-websocket-notifications';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { BalanceCard } from '@/components/dashboard/balance-card';
@@ -31,6 +32,9 @@ export default function DashboardPage() {
   const [wallets, setWallets] = useState<Array<{ chain: string; address: string }>>([]);
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
   const [isWalletsLoading, setIsWalletsLoading] = useState(false);
+
+  // Ensure WebSocket connects with wallets after login/redirect
+  useWebSocketNotifications({ wallets });
 
   useEffect(() => {
     // Fetch user wallets once (deduped + cached)

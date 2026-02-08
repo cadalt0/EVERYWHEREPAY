@@ -1,10 +1,15 @@
-'use client';
+"use client";
 
-import React from "react"
+import React, { useState, useEffect } from "react";
+import jsPDF from "jspdf";
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
-import { useState } from 'react';
-import { Eye, X } from 'lucide-react';
+import { getWalletsForUser, getUserEmail } from '@/lib/balance-checker';
+import { Eye, X, Info } from 'lucide-react';
+import { chains } from '@/lib/mock-data';
+
+// Helper to check if all required fields are filled
+// ...existing code...
 
 interface InvoiceItem {
   id: string;
@@ -15,28 +20,112 @@ interface InvoiceItem {
 }
 
 export default function CreateInvoicePage() {
-  const [invoiceNo] = useState('000007');
-  const [issuedDate] = useState('1/30/26');
-  
+            // ...existing code...
+          const [shareLoading, setShareLoading] = useState(false);
+          const [shareModal, setShareModal] = useState<{ open: boolean; link: string } | null>(null);
+          const [lastSharedLink, setLastSharedLink] = useState<string | null>(null);
+        function generateRequestId() {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          let id = '';
+          for (let i = 0; i < 10; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+          return id;
+        }
+      // Autofill handler for INVOICE DETAILS button
+      const autofillInvoiceDetails = () => {
+        setInvoiceNo('INV-001');
+        setIssuedDate('2026-02-08');
+        setFormData(prev => ({
+          ...prev,
+          fromName: 'Acme Corp',
+          fromEmail: 'acme@example.com',
+          fromCity: 'New York',
+          fromCountry: 'USA',
+          fromPincode: '10001',
+          toName: 'Client LLC',
+          toEmail: 'client@example.com',
+          toCity: 'San Francisco',
+          toCountry: 'USA',
+          toPincode: '94105',
+          dueDate: '2026-02-15',
+          subject: 'Consulting Services',
+          // chainAddress stays unchanged
+        }));
+        setItems([{
+          id: '1',
+          description: 'Consulting Service Fee',
+          qty: 1,
+          price: 1000,
+          amount: 1000
+        }]);
+      };
+    // Helper to check if all required fields are filled
+    const allFieldsFilled = () => {
+      const requiredFields = [
+        invoiceNo,
+        issuedDate,
+        formData.dueDate,
+        formData.fromName,
+        formData.fromEmail,
+        formData.fromCity,
+        formData.fromCountry,
+        formData.fromPincode,
+        formData.toName,
+        formData.toEmail,
+        formData.toCity,
+        formData.toCountry,
+        formData.toPincode,
+        formData.subject
+      ];
+      return requiredFields.every(f => f && f.trim().length > 0);
+    };
+  const [invoiceNo, setInvoiceNo] = useState('');
+  const [issuedDate, setIssuedDate] = useState('');
+
   const [formData, setFormData] = useState({
-    fromName: 'Your Company',
-    fromEmail: 'hello@example.com',
-    fromCity: 'San Francisco',
-    fromCountry: 'United States',
-    fromPincode: '94103',
-    toName: 'Client Name',
-    toEmail: 'client@example.com',
-    toCity: 'New York',
-    toCountry: 'United States',
-    toPincode: '10001',
-    dueDate: '2/13/26',
-    subject: 'Website Design Services',
+    fromName: '',
+    fromEmail: '',
+    fromCity: '',
+    fromCountry: '',
+    fromPincode: '',
+    toName: '',
+    toEmail: '',
+    toCity: '',
+    toCountry: '',
+    toPincode: '',
+    dueDate: '',
+    subject: '',
     chain: 'ethereum',
-    chainAddress: '0x742d35Cc6634C0532925a3b844Bc5e8c5e5e8c5e',
+    chainAddress: '',
   });
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [walletMap, setWalletMap] = useState<Record<string, string>>({});
+
+  // On mount, fetch user's wallet address for the selected chain and set it
+  useEffect(() => {
+    async function fetchWallet() {
+      setAddressLoading(true);
+      const email = await getUserEmail();
+      if (!email) { setAddressLoading(false); return; }
+      const map = await getWalletsForUser(email);
+      setWalletMap(map);
+      setAddressLoading(false);
+    }
+    fetchWallet();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update chainAddress in formData when walletMap or chain changes
+  useEffect(() => {
+    const chain = formData.chain || 'ethereum';
+    let address = walletMap[chain.toUpperCase()] || walletMap[chain] || '';
+    if (!address && Object.values(walletMap).length > 0) {
+      address = Object.values(walletMap)[0]; // fallback to first address
+    }
+    setFormData(prev => ({ ...prev, chainAddress: address }));
+  }, [walletMap, formData.chain]);
 
   const [items, setItems] = useState<InvoiceItem[]>([
-    { id: '1', description: 'Website Design', qty: 1, price: 2500, amount: 2500 },
+    { id: '1', description: '', qty: 1, price: 0, amount: 0 },
   ]);
 
   const [showPreview, setShowPreview] = useState(false);
@@ -79,6 +168,46 @@ export default function CreateInvoicePage() {
   };
 
   return (
+    <>
+    {/* Share Modal */}
+    {shareModal?.open && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-background border border-border rounded-lg max-w-md w-full p-8 flex flex-col items-center">
+          <h2 className="text-xl font-bold mb-4">Invoice Shared!</h2>
+          <div className="mb-4 w-full">
+            <label className="text-xs font-mono text-muted-foreground mb-1 block">Payment Link</label>
+            <div className="flex items-center gap-2">
+              <input type="text" value={shareModal.link} readOnly className="w-full px-2 py-1 border border-border rounded text-xs font-mono" />
+              <button onClick={() => {navigator.clipboard.writeText(shareModal.link)}} className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded">Copy</button>
+            </div>
+          </div>
+          <button
+            className="w-full py-2 mt-2 border border-border rounded font-mono hover:bg-muted transition-colors"
+            onClick={() => {
+              // Generate PDF using jsPDF
+              const doc = new jsPDF();
+              doc.text('Invoice', 10, 10);
+              doc.text(`Invoice No: ${invoiceNo}`, 10, 20);
+              doc.text(`Issued: ${issuedDate}`, 10, 30);
+              doc.text(`Due: ${formData.dueDate}`, 10, 40);
+              doc.text(`From: ${formData.fromName}, ${formData.fromEmail}, ${formData.fromCity}, ${formData.fromCountry}`, 10, 50);
+              doc.text(`To: ${formData.toName}, ${formData.toEmail}, ${formData.toCity}, ${formData.toCountry}`, 10, 60);
+              doc.text(`Subject: ${formData.subject}`, 10, 70);
+              let y = 80;
+              items.forEach((item, idx) => {
+                doc.text(`Item ${idx + 1}: ${item.description} x${item.qty} @ $${item.price} = $${item.amount}`, 10, y);
+                y += 10;
+              });
+              doc.text(`Total: $${total} USDC`, 10, y);
+              y += 10;
+              doc.text(`Pay with EVERYWHEREPAY: ${shareModal.link}`, 10, y);
+              doc.save(`invoice-${invoiceNo}.pdf`);
+            }}
+          >Download PDF</button>
+          <button className="w-full py-2 mt-2 border border-border rounded font-mono hover:bg-muted transition-colors" onClick={() => setShareModal(null)}>Close</button>
+        </div>
+      </div>
+    )}
     <div className="flex h-screen bg-background">
       <Sidebar />
 
@@ -86,51 +215,79 @@ export default function CreateInvoicePage() {
         <Topbar title="Create Invoice" />
 
         <main className="flex-1 overflow-auto">
-          <div className="p-4 md:p-8 max-w-6xl">
-            <div className="grid lg:grid-cols-3 gap-8">
+          <div className="p-8 w-full max-w-4xl mx-auto">
+            <div className="grid lg:grid-cols-3 gap-8 w-full">
               {/* Form Section */}
               <div className="lg:col-span-2 space-y-8">
                 {/* Header Info */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-mono font-bold text-muted-foreground">INVOICE DETAILS</h3>
-                  <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-6 pb-2 border-b border-border mb-8">
+                  <h3 className="text-sm font-mono font-bold text-muted-foreground mb-0">INVOICE DETAILS</h3>
+                                  <button
+                                    type="button"
+                                    onClick={autofillInvoiceDetails}
+                                    className="text-xs font-mono text-muted-foreground mb-0 bg-transparent border-none p-0 underline cursor-pointer"
+                                    style={{ marginLeft: 8 }}
+                                    aria-label="Autofill Invoice Details"
+                                  >[Auto Fill]</button>
+                  <div className="grid grid-cols-3 gap-4 justify-center items-center mx-auto w-fit min-h-[60px] bg-background">
                     <div>
                       <label className="text-xs font-mono text-muted-foreground mb-1 block">Invoice No</label>
-                      <input type="text" value={invoiceNo} disabled className="w-full px-3 py-2 border border-border rounded bg-muted/30 font-mono text-sm" />
+                      <input
+                        type="text"
+                        value={invoiceNo}
+                        onChange={e => setInvoiceNo(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder=""
+                        required
+                      />
                     </div>
                     <div>
-                      <label className="text-xs font-mono text-muted-foreground mb-1 block">Issued</label>
-                      <input type="text" value={issuedDate} disabled className="w-full px-3 py-2 border border-border rounded bg-muted/30 font-mono text-sm" />
+                      <label className="text-xs font-mono text-muted-foreground mb-1 block">Issued Date</label>
+                      <input
+                        type="text"
+                        value={issuedDate}
+                        onChange={e => setIssuedDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder=""
+                        required
+                      />
                     </div>
                     <div>
                       <label className="text-xs font-mono text-muted-foreground mb-1 block">Due Date</label>
-                      <input type="text" name="dueDate" value={formData.dueDate} onChange={handleFormChange} className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <input
+                        type="text"
+                        name="dueDate"
+                        value={formData.dueDate}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder=""
+                        required
+                      />
                     </div>
                   </div>
                 </div>
-
                 {/* From/To Section */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-mono font-bold text-muted-foreground">FROM & TO</h3>
-                  <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-6 pb-2 border-b border-border mb-8">
+                  <h3 className="text-base font-mono font-bold text-foreground tracking-wide mb-2">FROM & TO</h3>
+                  <div className="grid md:grid-cols-2 gap-8">
                     {/* From */}
                     <div className="space-y-3">
                       <label className="text-xs font-mono font-semibold">FROM</label>
-                      <input type="text" name="fromName" value={formData.fromName} onChange={handleFormChange} placeholder="Company Name" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="email" name="fromEmail" value={formData.fromEmail} onChange={handleFormChange} placeholder="Email" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="text" name="fromCity" value={formData.fromCity} onChange={handleFormChange} placeholder="City" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="text" name="fromCountry" value={formData.fromCountry} onChange={handleFormChange} placeholder="Country" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="text" name="fromPincode" value={formData.fromPincode} onChange={handleFormChange} placeholder="Pincode" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <input type="text" name="fromName" value={formData.fromName} onChange={handleFormChange} placeholder="Company Name" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="email" name="fromEmail" value={formData.fromEmail} onChange={handleFormChange} placeholder="Email" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="text" name="fromCity" value={formData.fromCity} onChange={handleFormChange} placeholder="City" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="text" name="fromCountry" value={formData.fromCountry} onChange={handleFormChange} placeholder="Country" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="text" name="fromPincode" value={formData.fromPincode} onChange={handleFormChange} placeholder="Pincode" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
                     </div>
 
                     {/* To */}
                     <div className="space-y-3">
                       <label className="text-xs font-mono font-semibold">TO</label>
-                      <input type="text" name="toName" value={formData.toName} onChange={handleFormChange} placeholder="Client Name" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="email" name="toEmail" value={formData.toEmail} onChange={handleFormChange} placeholder="Email" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="text" name="toCity" value={formData.toCity} onChange={handleFormChange} placeholder="City" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="text" name="toCountry" value={formData.toCountry} onChange={handleFormChange} placeholder="Country" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input type="text" name="toPincode" value={formData.toPincode} onChange={handleFormChange} placeholder="Pincode" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <input type="text" name="toName" value={formData.toName} onChange={handleFormChange} placeholder="Client Name" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="email" name="toEmail" value={formData.toEmail} onChange={handleFormChange} placeholder="Email" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="text" name="toCity" value={formData.toCity} onChange={handleFormChange} placeholder="City" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="text" name="toCountry" value={formData.toCountry} onChange={handleFormChange} placeholder="Country" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
+                      <input type="text" name="toPincode" value={formData.toPincode} onChange={handleFormChange} placeholder="Pincode" className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
                     </div>
                   </div>
                 </div>
@@ -138,7 +295,7 @@ export default function CreateInvoicePage() {
                 {/* Subject */}
                 <div>
                   <label className="text-xs font-mono text-muted-foreground mb-2 block">SUBJECT</label>
-                  <input type="text" name="subject" value={formData.subject} onChange={handleFormChange} placeholder="What is this invoice for?" className="w-full px-4 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <input type="text" name="subject" value={formData.subject} onChange={handleFormChange} placeholder="What is this invoice for?" className="w-full px-4 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary" required />
                 </div>
 
                 {/* Line Items */}
@@ -189,28 +346,123 @@ export default function CreateInvoicePage() {
                 <div className="space-y-4">
                   <h3 className="text-sm font-mono font-bold text-muted-foreground">PAYMENT INFO</h3>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-mono text-muted-foreground mb-2 block">CHAIN</label>
-                      <select name="chain" value={formData.chain} onChange={handleFormChange} className="w-full px-3 py-2 border border-border rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                        <option value="ethereum">Ethereum</option>
-                        <option value="polygon">Polygon</option>
-                        <option value="arbitrum">Arbitrum</option>
-                      </select>
+                    <div className="relative group">
+                      <label className="text-xs font-mono text-muted-foreground mb-2 block flex items-center gap-1">
+                        CHAIN
+                        <span className="ml-1">
+                          <Info className="w-3 h-3 text-muted-foreground group-hover:text-primary cursor-pointer" />
+                        </span>
+                      </label>
+                      <div className="relative w-full group" tabIndex={0}>
+                        {/* Tooltip on hover - above */}
+                        <div className="absolute left-0 bottom-full mb-2 z-20 hidden group-hover:block group-focus:block bg-background border border-border rounded shadow-lg p-3 min-w-[220px] text-xs text-foreground font-mono">
+                          <div className="font-bold mb-1">Supported Chains:</div>
+                          <ul className="list-disc pl-4">
+                            {chains.map(chain => (
+                              <li key={chain.id}>{chain.name}</li>
+                            ))}
+                          </ul>
+                          <div className="mt-2 text-muted-foreground">Can be paid any of these chains.</div>
+                        </div>
+                        <div
+                          className="w-full px-3 py-2 border border-border rounded font-mono text-sm bg-muted text-muted-foreground cursor-not-allowed"
+                        >
+                          Payments are auto-routed from supported chains
+                        </div>
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs font-mono text-muted-foreground mb-2 block">WALLET ADDRESS</label>
-                      <input type="text" name="chainAddress" value={formData.chainAddress} onChange={handleFormChange} className="w-full px-3 py-2 border border-border rounded font-mono text-xs focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <input
+                        type="text"
+                        name="chainAddress"
+                        value={addressLoading ? 'Loading...' : formData.chainAddress}
+                        disabled
+                        className={`w-full px-3 py-2 border border-border rounded font-mono text-xs bg-muted text-muted-foreground cursor-not-allowed ${addressLoading ? 'animate-pulse' : ''}`}
+                        placeholder={addressLoading ? 'Loading...' : 'Your wallet address'}
+                      />
                     </div>
                   </div>
                 </div>
 
                 <div className="flex gap-3 pt-4">
-                  <button onClick={() => setShowPreview(true)} className="flex-1 py-3 bg-primary text-primary-foreground rounded font-mono font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setShowPreview(true)}
+                    className="flex-1 py-3 bg-primary text-primary-foreground rounded font-mono font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                    disabled={!allFieldsFilled()}
+                    style={!allFieldsFilled() ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                  >
                     <Eye className="w-4 h-4" />
                     Preview Invoice
                   </button>
-                  <button className="flex-1 py-3 border border-border rounded font-mono hover:bg-muted transition-colors">
-                    Save Draft
+                  <button
+                    className="flex-1 py-3 border border-border rounded font-mono hover:bg-muted transition-colors flex items-center justify-center gap-2"
+                    disabled={!allFieldsFilled() || shareLoading}
+                    style={!allFieldsFilled() || shareLoading ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                    onClick={async () => {
+                      if (!allFieldsFilled()) return;
+                      setShareLoading(true);
+                      const id = generateRequestId();
+                      let email = null;
+                      if (typeof window !== 'undefined') {
+                        const userStr = localStorage.getItem('user');
+                        if (userStr) {
+                          try {
+                            const user = JSON.parse(userStr);
+                            email = user.email || null;
+                          } catch {}
+                        }
+                      }
+                      if (!email) {
+                        setShareLoading(false);
+                        alert('User email not found. Please log in again.');
+                        return;
+                      }
+                      const baseUrl = process.env.NEXT_PUBLIC_SETTLE_API_URL?.trim() || '';
+                      const invoiceMsg = JSON.stringify({
+                        invoiceNo,
+                        issuedDate,
+                        dueDate: formData.dueDate,
+                        fromName: formData.fromName,
+                        fromEmail: formData.fromEmail,
+                        fromCity: formData.fromCity,
+                        fromCountry: formData.fromCountry,
+                        fromPincode: formData.fromPincode,
+                        toName: formData.toName,
+                        toEmail: formData.toEmail,
+                        toCity: formData.toCity,
+                        toCountry: formData.toCountry,
+                        toPincode: formData.toPincode,
+                        subject: formData.subject,
+                        items,
+                      });
+                      const url = `${baseUrl}/request/${id}/${email}/${total}/${encodeURIComponent(invoiceMsg)}`;
+                      try {
+                        const res = await fetch(url, { method: 'POST' });
+                        if (res.ok) {
+                          const data = await res.json();
+                          let requestId = id;
+                          if (data && data.success && data.request && data.request.requestid) {
+                            requestId = data.request.requestid;
+                          }
+                          const link = `${window.location.origin}/pay/${requestId}`;
+                          setLastSharedLink(link);
+                          setShareModal({ open: true, link });
+                        } else {
+                          const errMsg = await res.text();
+                          alert('Failed to share invoice: ' + errMsg);
+                        }
+                      } catch (err) {
+                        alert('Failed to share invoice.');
+                      } finally {
+                        setShareLoading(false);
+                      }
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 19.5L21.5 12L2.5 4.5L5.5 12L2.5 19.5Z" />
+                    </svg>
+                    {shareLoading ? 'Sending...' : 'Share'}
                   </button>
                 </div>
               </div>
@@ -303,11 +555,59 @@ export default function CreateInvoicePage() {
                       </div>
 
                       <div className="border-t border-border pt-6 space-y-3">
+                                              {/* Payment link below wallet address */}
+                                              {lastSharedLink && (
+                                                <div className="mt-2">
+                                                  <span className="text-xs font-mono text-muted-foreground">Pay with EVERYWHEREPAY: </span>
+                                                  <a href={lastSharedLink} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{lastSharedLink}</a>
+                                                </div>
+                                              )}
+                          {/* Share Modal */}
+                          {shareModal?.open && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                              <div className="bg-background border border-border rounded-lg max-w-md w-full p-8 flex flex-col items-center">
+                                <h2 className="text-xl font-bold mb-4">Invoice Shared!</h2>
+                                <div className="mb-4 w-full">
+                                  <label className="text-xs font-mono text-muted-foreground mb-1 block">Payment Link</label>
+                                  <div className="flex items-center gap-2">
+                                    <input type="text" value={shareModal.link} readOnly className="w-full px-2 py-1 border border-border rounded text-xs font-mono" />
+                                    <button onClick={() => {navigator.clipboard.writeText(shareModal.link)}} className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded">Copy</button>
+                                  </div>
+                                </div>
+                                <button
+                                  className="w-full py-2 mt-2 border border-border rounded font-mono hover:bg-muted transition-colors"
+                                  onClick={() => {
+                                    // Generate PDF using jsPDF
+                                    const doc = new jsPDF();
+                                    doc.text('Invoice', 10, 10);
+                                    doc.text(`Invoice No: ${invoiceNo}`, 10, 20);
+                                    doc.text(`Issued: ${issuedDate}`, 10, 30);
+                                    doc.text(`Due: ${formData.dueDate}`, 10, 40);
+                                    doc.text(`From: ${formData.fromName}, ${formData.fromEmail}, ${formData.fromCity}, ${formData.fromCountry}`, 10, 50);
+                                    doc.text(`To: ${formData.toName}, ${formData.toEmail}, ${formData.toCity}, ${formData.toCountry}`, 10, 60);
+                                    doc.text(`Subject: ${formData.subject}`, 10, 70);
+                                    let y = 80;
+                                    items.forEach((item, idx) => {
+                                      doc.text(`Item ${idx + 1}: ${item.description} x${item.qty} @ $${item.price} = $${item.amount}`, 10, y);
+                                      y += 10;
+                                    });
+                                    doc.text(`Total: $${total} USDC`, 10, y);
+                                    y += 10;
+                                    doc.text(`Pay with EVERYWHEREPAY: ${shareModal.link}`, 10, y);
+                                    doc.save(`invoice-${invoiceNo}.pdf`);
+                                  }}
+                                >Download PDF</button>
+                                <button className="w-full py-2 mt-2 border border-border rounded font-mono hover:bg-muted transition-colors" onClick={() => setShareModal(null)}>Close</button>
+                              </div>
+                            </div>
+                          )}
                         <p className="text-xs text-muted-foreground font-mono mb-3 font-bold">PAYMENT INFO</p>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <p className="text-xs text-muted-foreground font-mono mb-1">NETWORK</p>
-                            <p className="font-mono capitalize">{formData.chain}</p>
+                            <p className="text-xs text-muted-foreground font-mono mb-1">NETWORKS SUPPORTED</p>
+                            <p className="font-mono capitalize">
+                              {chains.map(chain => chain.name).join(', ')}
+                            </p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground font-mono mb-1">WALLET</p>
@@ -328,5 +628,6 @@ export default function CreateInvoicePage() {
         </main>
       </div>
     </div>
+    </>
   );
 }

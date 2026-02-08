@@ -20,6 +20,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   // Load saved sidebar state synchronously before first render to prevent flash
   useLayoutEffect(() => {
@@ -45,18 +46,18 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile Toggle Button */}
-      <div className="hidden md:hidden fixed top-20 left-4 z-40">
-        <button
-          onClick={handleToggleSidebar}
-          className="p-2 hover:bg-muted rounded-lg transition-colors"
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <ChevronLeft className={`w-5 h-5 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
-        </button>
-      </div>
+      {/* Hamburger button for mobile */}
+      <button
+        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-card border border-border rounded-lg shadow-lg flex flex-col gap-1"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open sidebar"
+      >
+        <span className="block w-6 h-1 bg-foreground rounded" />
+        <span className="block w-6 h-1 bg-foreground rounded" />
+        <span className="block w-6 h-1 bg-foreground rounded" />
+      </button>
 
-      {/* Sidebar */}
+      {/* Sidebar for desktop */}
       <aside
         className={`border-r border-border bg-card flex flex-col h-screen sticky top-0 transition-all duration-300 ${
           isCollapsed ? 'w-20' : 'w-64'
@@ -67,10 +68,11 @@ export function Sidebar() {
           <Link
             href="/dashboard"
             className={`font-bold font-mono tracking-tighter transition-all ${
-              isCollapsed ? 'text-sm' : 'text-xl'
+              isCollapsed ? 'text-lg' : 'text-xl'
             }`}
+            style={{ letterSpacing: isCollapsed ? 0 : undefined }}
           >
-            {!isCollapsed && 'EVERYWHEREPAY'}
+            {isCollapsed ? 'EP' : 'EVERYWHEREPAY'}
           </Link>
           <button
             onClick={handleToggleSidebar}
@@ -87,6 +89,21 @@ export function Sidebar() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
+            // Payouts nav item is grayed out and not clickable
+            if (item.href === '/payout') {
+              return (
+                <div
+                  key={item.href}
+                  title={isCollapsed ? item.label : ''}
+                  className={
+                    'flex items-center gap-3 px-4 py-3 rounded-lg font-mono transition-all justify-center md:justify-start text-muted-foreground bg-muted/50 cursor-not-allowed opacity-60'
+                  }
+                >
+                  <item.icon className="w-4 h-4 flex-shrink-0" />
+                  {!isCollapsed && <span className="text-sm font-semibold">{item.label} (Coming Soon)</span>}
+                </div>
+              );
+            }
             return (
               <Link
                 key={item.href}
@@ -103,18 +120,18 @@ export function Sidebar() {
               </Link>
             );
           })}
+                  {/* Settings button is already present in the bottom actions below */}
         </nav>
 
         {/* Bottom Actions */}
         <div className="px-4 py-6 border-t border-border space-y-2">
-          <button
-            onClick={() => setShowSettings(true)}
-            title="Settings"
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-muted transition-colors font-mono text-sm justify-center md:justify-start"
+          <div
+            title="Settings (Coming Soon)"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground bg-muted/50 cursor-not-allowed opacity-60 font-mono text-sm justify-center md:justify-start"
           >
             <Settings className="w-4 h-4 flex-shrink-0" />
-            {!isCollapsed && <span>Settings</span>}
-          </button>
+            {!isCollapsed && <span>Settings (Coming Soon)</span>}
+          </div>
           <button
             onClick={() => {
               localStorage.removeItem('user');
@@ -129,63 +146,68 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile Sidebar */}
-      {isCollapsed && (
-        <aside className="w-64 border-r border-border bg-card flex flex-col h-screen fixed top-0 left-0 z-30 md:hidden">
-          <div className="px-6 py-8 border-b border-border flex items-center justify-between">
-            <Link href="/dashboard" className="font-bold text-xl font-mono tracking-tighter">
-              EVERYWHEREPAY
-            </Link>
-            <button
-              onClick={handleToggleSidebar}
-              className="p-1 hover:bg-muted rounded transition-colors"
-              aria-label="Close sidebar"
-            >
-              <ChevronLeft className="w-4 h-4 rotate-180" />
-            </button>
-          </div>
-
-          <nav className="flex-1 px-4 py-6 space-y-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg font-mono transition-all ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-foreground hover:bg-muted'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-sm font-semibold">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="px-4 py-6 border-t border-border space-y-2">
-            <button
-              onClick={() => setShowSettings(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-muted transition-colors font-mono text-sm"
-            >
-              <Settings className="w-4 h-4" />
-              <span>Settings</span>
-            </button>
-            <button
-              onClick={() => {
-                localStorage.removeItem('user');
-                window.location.href = '/';
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-destructive hover:bg-destructive/10 transition-colors font-mono text-sm"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Logout</span>
-            </button>
-          </div>
-        </aside>
+      {/* Mobile Sidebar overlay */}
+      {mobileOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close sidebar overlay"
+          />
+          <aside className="w-64 border-r border-border bg-card flex flex-col h-screen fixed top-0 left-0 z-50 md:hidden animate-slide-in">
+            <div className="px-6 py-8 border-b border-border flex items-center justify-between">
+              <Link href="/dashboard" className="font-bold text-xl font-mono tracking-tighter">
+                EVERYWHEREPAY
+              </Link>
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="p-1 hover:bg-muted rounded transition-colors"
+                aria-label="Close sidebar"
+              >
+                <ChevronLeft className="w-4 h-4 rotate-180" />
+              </button>
+            </div>
+            <nav className="flex-1 px-4 py-6 space-y-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg font-mono transition-all ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm font-semibold">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+            <div className="px-4 py-6 border-t border-border space-y-2">
+              <div
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground bg-muted/50 cursor-not-allowed opacity-60 font-mono text-sm"
+                title="Settings (Coming Soon)"
+              >
+                <Settings className="w-4 h-4" />
+                <span>Settings (Coming Soon)</span>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.removeItem('user');
+                  window.location.href = '/';
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-destructive hover:bg-destructive/10 transition-colors font-mono text-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </aside>
+        </>
       )}
 
       <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />

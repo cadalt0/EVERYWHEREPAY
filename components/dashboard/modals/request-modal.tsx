@@ -12,21 +12,67 @@ interface RequestModalProps {
 
 export function RequestModal({ isOpen, onClose }: RequestModalProps) {
   const [amount, setAmount] = useState('');
-  const [chain, setChain] = useState('eth');
   const [message, setMessage] = useState('');
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const requestLink = `https://everywherepay.com/request/${Math.random().toString(36).slice(2, 9)}`;
+  function generateRequestId() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let id = '';
+    for (let i = 0; i < 10; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+    return id;
+  }
 
-  const handleGenerate = () => {
-    if (amount) {
-      setGenerated(true);
+  const handleGenerate = async () => {
+    setError(null);
+    if (!amount) return;
+    const id = generateRequestId();
+    let email = null;
+    if (typeof window !== 'undefined') {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          email = user.email || null;
+        } catch {}
+      }
+    }
+    if (!email) {
+      setError('User email not found. Please log in again.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_SETTLE_API_URL?.trim() || '';
+      const msg = message && message.trim() ? message : 'everywherepay';
+      const url = `${baseUrl}/request/${id}/${email}/${amount}/${encodeURIComponent(msg)}`;
+      const res = await fetch(url, { method: 'POST' });
+      if (!res.ok) {
+        setError('Failed to create request.');
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      if (data && data.success && data.request && data.request.requestid) {
+        setRequestId(data.request.requestid);
+        setGenerated(true);
+      } else {
+        setError('Failed to create request.');
+      }
+    } catch (err) {
+      setError('Failed to create request.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const copyLink = () => {
-    navigator.clipboard.writeText(requestLink);
+    if (!requestId) return;
+    const link = `${window.location.origin}/pay/${requestId}`;
+    navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -68,24 +114,6 @@ export function RequestModal({ isOpen, onClose }: RequestModalProps) {
                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
                 />
               </div>
-
-              <div>
-                <label className="text-xs font-mono text-muted-foreground mb-2 block">
-                  Chain
-                </label>
-                <select
-                  value={chain}
-                  onChange={(e) => setChain(e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
-                >
-                  {chains.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div>
                 <label className="text-xs font-mono text-muted-foreground mb-2 block">
                   Message (optional)
@@ -98,77 +126,58 @@ export function RequestModal({ isOpen, onClose }: RequestModalProps) {
                   rows={3}
                 />
               </div>
+              {error && <div className="text-red-500 font-mono text-sm">{error}</div>}
             </>
           ) : (
-            <>
-              <div className="p-4 bg-accent/10 border border-accent/30 rounded-lg">
-                <div className="text-3xl font-bold font-mono mb-2">
-                  ${amount}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  on {chains.find((c) => c.id === chain)?.name}
+            <div className="w-full flex flex-col items-center justify-center gap-6">
+              <div className="p-4 border border-border rounded-lg w-full max-w-full flex flex-col items-center">
+                <p className="text-sm font-mono font-semibold mb-2">Share this link:</p>
+                <div className="flex items-center gap-2 w-full">
+                  <input
+                    type="text"
+                    value={`${window.location.origin}/pay/${requestId}`}
+                    readOnly
+                    className="flex-1 px-3 py-2 border border-border rounded-lg bg-muted text-foreground font-mono text-xs"
+                  />
+                  <button
+                    onClick={copyLink}
+                    className="p-2 hover:bg-muted rounded transition-colors flex-shrink-0"
+                  >
+                    {copied ? (
+                      <Check className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
               </div>
-
-              <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">█ ▄▄ ▄ ▄</div>
-                  <div className="text-xs text-muted-foreground font-mono">QR Code</div>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-mono text-muted-foreground mb-2 block">
-                  Request Link
-                </label>
-                <input
-                  type="text"
-                  value={requestLink}
-                  readOnly
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-muted text-foreground font-mono text-xs"
-                />
-              </div>
-
-              <button
-                onClick={copyLink}
-                className="w-full flex items-center justify-center gap-2 py-2 bg-primary text-primary-foreground rounded-lg font-mono font-semibold hover:opacity-90 transition-opacity"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy Link
-                  </>
-                )}
-              </button>
-            </>
+            </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-border flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2 border border-border rounded-lg font-mono hover:bg-muted transition-colors"
-          >
-            Cancel
-          </button>
           {!generated ? (
-            <button
-              onClick={handleGenerate}
-              className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg font-mono font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!amount}
-            >
-              Generate Request
-            </button>
+            <>
+              <button
+                onClick={onClose}
+                className="flex-1 py-2 border border-border rounded-lg font-mono hover:bg-muted transition-colors"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerate}
+                className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg font-mono font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!amount || loading}
+              >
+                {loading ? 'Creating...' : 'Generate Request'}
+              </button>
+            </>
           ) : (
             <button
               onClick={onClose}
-              className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg font-mono font-bold hover:opacity-90 transition-opacity"
+              className="w-full py-2 bg-primary text-primary-foreground rounded-lg font-mono font-bold hover:opacity-90 transition-opacity"
             >
               Done
             </button>
