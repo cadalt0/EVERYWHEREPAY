@@ -23,6 +23,7 @@ export const startServer = (port = DEFAULT_PORT) => {
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'https://everywherepay-e63bce248faa.herokuapp.com'
+      'https://everywherepay.vercel.app'
     ],
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true
