@@ -73,4 +73,5 @@ The EverywherePay server is the backend engine that powers all USDC cross-chain 
 - `/api/chains` — Supported chains and USDC addresses
 - WebSocket — Subscribe to wallet events for real-time updates
 
+https://ibb.co/1YYwZQ5t
 
