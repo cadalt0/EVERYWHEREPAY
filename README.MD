@@ -3,6 +3,7 @@
 EverywherePay is a next-generation USDC wallet platform for seamless, gasless, and fully automated cross-chain payments, requests, and invoicing. The platform abstracts all blockchain complexity, letting users interact with USDC across chains in a single, unified experience.
 
 
+![Screenshot](https://i.ibb.co/5XXfT4yg/Screenshot-From-2026-02-08-23-07-50.png)
 
 ## User Journey & Platform Logic
 
