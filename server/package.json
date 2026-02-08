@@ -1,0 +1,22 @@
+{
+  "name": "websocket-usdc-avax",
+  "version": "1.0.0",
+  "description": "WebSocket server for listening to USDC transfers on AVAX testnet using Alchemy WebSocket.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18.x"
+  },
+  "dependencies": {
+    "@circle-fin/developer-controlled-wallets": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.8.1",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "pg": "^8.18.0",
+    "ws": "^8.13.0"
+  }
+}
