@@ -50,3 +50,27 @@ EverywherePay is a next-generation USDC wallet platform for seamless, gasless, a
 - Multi-chain support for deposits, payouts, and payments
 
 
+Server (Backend)
+
+The EverywherePay server is the backend engine that powers all USDC cross-chain operations, wallet management, and real-time notifications.
+
+**Key Features:**
+- **Express API:** Handles REST endpoints for transfers, requests, wallet info, bridging, and attestation.
+- **WebSocket Server:** Provides real-time notifications for USDC deposits, payments, and cross-chain events.
+- **Circle Wallet Integration:** Initializes and manages Circle developer-controlled wallets (SCA) for each user.
+- **Deposit Monitoring:** Watches all user wallet addresses for incoming USDC on supported chains.
+- **Automated Bridging:** Uses Circle CCTPv2 to bridge USDC to ARC, settling funds in the Circle Gateway.
+- **Transfer & Request APIs:** Supports sending USDC to any chain, creating payment requests, and handling invoices.
+- **Error Handling & Resilience:** Global error handlers and graceful shutdown logic ensure reliability.
+
+**API Endpoints:**
+- `/api/transfer-out/:mail/:recipientAddress/:chain` — Send USDC cross-chain
+- `/request/:requestid/:user/:amount/:message` — Create payment request
+- `/request/:requestid` — Get request details
+- `/api/bridge/:chain/:email` — Manually bridge funds
+- `/api/attest/:burnHash/:route/:email` — Attestation for minting after burn
+- `/api/wallets?email=` — Get user wallet address
+- `/api/chains` — Supported chains and USDC addresses
+- WebSocket — Subscribe to wallet events for real-time updates
+
+
